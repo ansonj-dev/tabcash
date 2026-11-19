@@ -5,9 +5,13 @@ import {
   payMainnet,
   readPaymentStatus,
   validMainnetAddress,
+  setWalletWorkspace,
 } from "./wallet.js";
 import { submission } from "./submission.js";
-const STORAGE_KEY = "tabcash:v1";
+const LEGACY_STORAGE_KEY = "tabcash:v1";
+const SAMPLE_STORAGE_KEY = "tabcash:v2:sample";
+const REAL_STORAGE_KEY = "tabcash:v2:real";
+const MODE_STORAGE_KEY = "tabcash:v2:mode";
 const DEMO = {
   version: 1,
   title: "Weekend in Austin",
@@ -57,6 +61,15 @@ const DEMO = {
     },
   ],
 };
+const EMPTY_REAL_TAB = {
+  version: 1,
+  title: "My BCH tab",
+  me: "p-you",
+  people: [
+    { id: "p-you", name: "You", address: "", color: "#9ccf65" },
+  ],
+  events: [],
+};
 const palette = [
   "#9ccf65",
   "#df9d72",
@@ -66,21 +79,45 @@ const palette = [
   "#e08db0",
   "#d3bd69",
 ];
-let state = loadState();
+let migratedLegacyData = false;
+let mode = initialMode();
+let state = loadState(mode);
 let currentFilter = "all";
 let toastTimer;
 
-function loadState() {
+function initialMode() {
+  if (localStorage.getItem(REAL_STORAGE_KEY) === null) {
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (legacy) {
+      try {
+        const value = JSON.parse(legacy);
+        if (validateImport(value)) {
+          localStorage.setItem(REAL_STORAGE_KEY, JSON.stringify(value));
+          localStorage.setItem(MODE_STORAGE_KEY, "real");
+          localStorage.removeItem(LEGACY_STORAGE_KEY);
+          migratedLegacyData = true;
+          return "real";
+        }
+      } catch {
+        /* Keep unreadable legacy data untouched for recovery. */
+      }
+    }
+  }
+  return localStorage.getItem(MODE_STORAGE_KEY) === "real" ? "real" : "sample";
+}
+function loadState(workspaceMode) {
   try {
-    const value = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    const key = workspaceMode === "sample" ? SAMPLE_STORAGE_KEY : REAL_STORAGE_KEY;
+    const value = JSON.parse(localStorage.getItem(key));
     if (validateImport(value)) return value;
   } catch {
-    /* Start with the sample tab if saved data is unreadable. */
+    /* Start with the mode's safe default if saved data is unreadable. */
   }
-  return structuredClone(DEMO);
+  return structuredClone(workspaceMode === "sample" ? DEMO : EMPTY_REAL_TAB);
 }
 function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const key = mode === "sample" ? SAMPLE_STORAGE_KEY : REAL_STORAGE_KEY;
+  localStorage.setItem(key, JSON.stringify(state));
 }
 function id(prefix) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -223,7 +260,7 @@ function renderPeople(net) {
       el(
         "div",
         "person-name",
-        member.name + (member.id === state.me ? " · you" : ""),
+        member.name + (member.id === state.me && member.name !== "You" ? " · you" : ""),
       ),
     );
     const val = net[member.id] || 0;
@@ -384,9 +421,65 @@ function renderPlan(net = balances()) {
     );
 }
 function requestPayment(item) {
+  if (mode !== "real") {
+    showToast("Payment requests are available in My tab, not in the sample demo.");
+    return;
+  }
   const uri = paymentUri(item.to, item.amount);
   if (uri) copy(uri, "Payment request copied — review it in your wallet");
   else showToast(`${person(item.to).name} needs to add a BCH address first`);
+}
+function renderMode() {
+  const isSample = mode === "sample";
+  document.body.dataset.workspaceMode = mode;
+  document.querySelector("#sample-mode").setAttribute("aria-pressed", String(isSample));
+  document.querySelector("#real-mode").setAttribute("aria-pressed", String(!isSample));
+
+  const notice = document.querySelector("#mode-notice");
+  notice.classList.toggle("sample-mode", isSample);
+  notice.classList.toggle("real-mode", !isSample);
+  notice.replaceChildren(
+    el("b", "mode-label", isSample ? "SAMPLE DEMO" : "MY TAB"),
+    el(
+      "span",
+      "mode-description",
+      isSample
+        ? "Fictional Austin expenses. Editing stays in this sample; wallet payments and settlement records are disabled."
+        : "Your tab is saved only in this browser. Wallet payments send real BCH on mainnet after your confirmation.",
+    ),
+  );
+  if (migratedLegacyData && !isSample) {
+    notice.append(
+      el("span", "migration-note", "Your saved tab from the previous version was preserved here. The sample demo is separate."),
+    );
+  }
+
+  document.querySelector("#copy-plan-label").textContent =
+    isSample ? "Copy sample plan" : "Copy plan";
+  document.querySelector("#export-button").textContent =
+    isSample ? "Export sample data ↗" : "Export this tab ↗";
+  const importButton = document.querySelector("#import-button");
+  importButton.disabled = isSample;
+  importButton.title = isSample
+    ? "Switch to My tab before importing a personal tab."
+    : "Import a TabCash export into My tab.";
+  document.querySelector("#plan-dialog .modal-desc").textContent = isSample
+    ? "This is sample data. Wallet payments and settlement records are disabled in the sample demo."
+    : "Pay through your connected wallet, or record a confirmed payment manually. Broadcasts are pending until mined; balances change only when you record payment.";
+  setWalletWorkspace(mode);
+}
+function switchMode(nextMode) {
+  if (nextMode === mode) return;
+  mode = nextMode === "real" ? "real" : "sample";
+  localStorage.setItem(MODE_STORAGE_KEY, mode);
+  state = loadState(mode);
+  currentFilter = "all";
+  document.querySelectorAll(".filter").forEach((button) =>
+    button.classList.toggle("active", button.dataset.filter === "all"),
+  );
+  render();
+  renderMode();
+  showToast(mode === "sample" ? "Sample demo opened" : "My tab opened");
 }
 function renderExpenseForm() {
   const payer = document.querySelector("#payer-select");
@@ -456,9 +549,20 @@ document.querySelector("#settle-all").addEventListener("click", () => {
       el("span", "", `${person(item.from).name} pays ${person(item.to).name}`),
       el("span", "amount", shortBch(item.amount)),
     );
-    const pay = el("button", "outline-button", "Pay with connected wallet");
+    const sampleMode = mode === "sample";
+    const pay = el(
+      "button",
+      "outline-button",
+      sampleMode ? "Switch to My tab to pay" : "Pay with connected wallet",
+    );
+    pay.disabled = sampleMode;
+    if (sampleMode) pay.title = "Wallet payments are disabled in the sample demo.";
     pay.style.gridColumn = "2 / 4";
     pay.addEventListener("click", async () => {
+      if (mode !== "real") {
+        showToast("Switch to My tab before sending real BCH.");
+        return;
+      }
       try {
         pay.disabled = true;
         const pending = (state.payments || []).find(
@@ -510,11 +614,17 @@ document.querySelector("#settle-all").addEventListener("click", () => {
     const mark = el(
       "button",
       "outline-button",
-      "Record confirmed payment manually",
+      sampleMode ? "Settlement records disabled in sample mode" : "Record confirmed payment manually",
     );
+    mark.disabled = sampleMode;
+    if (sampleMode) mark.title = "Sample settlements are never recorded as real payments.";
     mark.style.gridColumn = "2 / 4";
     mark.style.marginTop = "0";
     mark.addEventListener("click", () => {
+      if (mode !== "real") {
+        showToast("Switch to My tab before recording a settlement.");
+        return;
+      }
       if (
         !confirm(
           `Have you independently confirmed ${person(item.from).name}'s ${shortBch(item.amount)} payment to ${person(item.to).name}? This is your manual record; TabCash has not verified confirmation.`,
@@ -650,13 +760,15 @@ document.querySelectorAll(".filter").forEach((button) =>
   }),
 );
 document.querySelector("#export-button").addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify(state, null, 2)], {
+  const exported = { ...state, workspaceMode: mode };
+  const blob = new Blob([JSON.stringify(exported, null, 2)], {
     type: "application/json",
   });
   const url = URL.createObjectURL(blob);
   const anchor = el("a");
   anchor.href = url;
-  anchor.download = `tabcash-${state.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`;
+  const prefix = mode === "sample" ? "tabcash-sample" : "tabcash";
+  anchor.download = `${prefix}-${state.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
   showToast("Tab export saved");
@@ -672,10 +784,15 @@ document
     const file = event.target.files[0];
     if (!file) return;
     try {
+      if (mode !== "real")
+        throw new Error("Switch to My tab before importing personal data.");
       const value = JSON.parse(await file.text());
       if (!validateImport(value))
         throw new Error("The selected file is not a TabCash export.");
-      state = value;
+      if (value.workspaceMode === "sample")
+        throw new Error("Sample demo exports cannot be imported into My tab.");
+      const { workspaceMode: _workspaceMode, ...importedState } = value;
+      state = importedState;
       save();
       render();
       showToast("Tab imported");
@@ -684,10 +801,15 @@ document
     }
     event.target.value = "";
   });
+document.querySelector("#sample-mode").addEventListener("click", () =>
+  switchMode("sample"),
+);
+document.querySelector("#real-mode").addEventListener("click", () =>
+  switchMode("real"),
+);
 render();
 walletPanel();
-document.querySelector("#plan-dialog .modal-desc").textContent =
-  "Pay through your connected wallet, or record a confirmed payment manually. Broadcasts are pending until mined; balances change only when you record payment.";
+renderMode();
 const submissionLinks = document.querySelector("#submission-links");
 const submissionReport = validateSubmission(submission);
 for (const check of submissionReport.checks) {
@@ -718,14 +840,19 @@ const gettingStarted = document.createElement("details");
 gettingStarted.className = "getting-started";
 gettingStarted.open = localStorage.getItem("tabcash:guide-dismissed") !== "yes";
 gettingStarted.innerHTML =
-  '<summary>Start here · a two-minute TabCash walkthrough</summary><p>The preloaded Austin expenses are fictional sample data. No payment or transaction is simulated.</p><ol><li>Inspect the sample balances, then add an expense to see exact satoshi splitting.<button class="outline-button" data-guide-action="add-expense">Add an expense</button></li><li>Click a name in People (or focus it and press Enter) to add the actual recipient’s BCH address.</li><li>Review the settlement plan. Connecting a wallet and every real payment are explicit steps.<button class="outline-button" data-guide-action="settle-all">Review paybacks</button></li><li>After a real send, read its status and verify independently in your wallet. Record confirmation manually to update the tab.</li></ol><button id="dismiss-guide" class="outline-button">Keep this guide collapsed</button>';
-document.querySelector(".hackathon-banner").after(gettingStarted);
+  '<summary>Start here · a two-minute TabCash walkthrough</summary><p>TabCash has two separate workspaces. Sample demo has fictional Austin expenses and never sends BCH. My tab starts empty and stays in this browser.</p><ol><li>Use Sample demo to explore example balances and satoshi splitting.<button class="outline-button" data-guide-action="sample-expense">Add a sample expense</button></li><li>Switch to My tab, add your group and record actual shared expenses. The two tabs keep separate data.</li><li>In My tab, add each recipient’s real BCH address and review the settlement plan.<button class="outline-button" data-guide-action="real-plan">Open My tab settlement plan</button></li><li>Wallet payments are real BCH mainnet transactions. Confirm the recipient, amount, fee and change in your wallet; verify the transaction before recording a settlement.</li></ol><button id="dismiss-guide" class="outline-button">Keep this guide collapsed</button>';
+document.querySelector("#mode-notice").after(gettingStarted);
 gettingStarted
   .querySelectorAll("[data-guide-action]")
   .forEach(
-    (button) =>
-      (button.onclick = () =>
-        document.getElementById(button.dataset.guideAction).click()),
+    (button) => (button.onclick = () => {
+      const guideAction = button.dataset.guideAction;
+      const targetMode = guideAction === "sample-expense" ? "sample" : "real";
+      switchMode(targetMode);
+      document
+        .querySelector(guideAction === "sample-expense" ? "#add-expense" : "#settle-all")
+        .click();
+    }),
   );
 document.querySelector("#dismiss-guide").onclick = () => {
   gettingStarted.open = false;

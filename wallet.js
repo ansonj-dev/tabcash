@@ -19,6 +19,7 @@ import QRCode from "qrcode";
 import iconUrl from "./icon.svg?url";
 
 let manager;
+let workspaceMode = "sample";
 const provider = new ElectrumNetworkProvider("mainnet");
 let relay,
   ready = false,
@@ -26,6 +27,28 @@ let relay,
   controller;
 const status = (text) =>
   (document.querySelector("#wallet-status").textContent = text);
+function syncWalletButton() {
+  const button = document.querySelector("#connect-wallet");
+  if (!button) return;
+  const sampleMode = workspaceMode !== "real";
+  button.disabled = sampleMode;
+  button.textContent = sampleMode
+    ? "Wallet · My tab only"
+    : ready
+      ? "Wallet connected"
+      : "Connect wallet";
+  button.title = sampleMode
+    ? "Switch to My tab before connecting a wallet."
+    : "Connect a WizardConnect HD wallet on BCH mainnet.";
+  button.setAttribute(
+    "aria-label",
+    sampleMode ? "Wallet connection is available only in My tab" : button.textContent,
+  );
+}
+export function setWalletWorkspace(mode) {
+  workspaceMode = mode === "real" ? "real" : "sample";
+  syncWalletButton();
+}
 const address = (path, index) => {
   const publicKey = manager.getPubkey(path, BigInt(index));
   if (!publicKey) throw Error("Wallet must share receive and change HD paths");
@@ -52,8 +75,7 @@ export function walletPanel() {
         status(
           `${msg.wallet_name} connected. Receive address: ${address(0, 0)}. Mainnet BCH only.`,
         );
-        document.querySelector("#connect-wallet").textContent =
-          "Wallet connected";
+        syncWalletButton();
       } catch (e) {
         ready = false;
         status(e.message);
@@ -64,16 +86,20 @@ export function walletPanel() {
       ready = false;
       relay?.cleanup();
       status("Wallet disconnected");
-      document.querySelector("#connect-wallet").textContent = "Connect wallet";
+      syncWalletButton();
     });
     return next;
   };
   manager = newManager();
   document.querySelector("#connect-wallet").onclick = () => {
+    if (workspaceMode !== "real") return;
     document.querySelector("#wallet-dialog").showModal();
   };
+  syncWalletButton();
   document.querySelector("#start-pairing").onclick = async () => {
     try {
+      if (workspaceMode !== "real")
+        throw Error("Switch to My tab before connecting a wallet.");
       if (busy)
         throw Error("Finish or cancel the current signing request first");
       if (relay) relay.cleanup();
@@ -81,6 +107,7 @@ export function walletPanel() {
       manager = newManager();
       const pairingManager = manager;
       ready = false;
+      syncWalletButton();
       relay = initiateDappRelay((payload) => {
         if (manager !== pairingManager) return;
         pairingManager.updateConnection(payload.client, payload.status);
@@ -107,7 +134,7 @@ export function walletPanel() {
     relay = null;
     ready = false;
     status("Disconnected; session was not persisted.");
-    document.querySelector("#connect-wallet").textContent = "Connect wallet";
+    syncWalletButton();
   };
   document.querySelector("#cancel-signing").onclick = () =>
     controller?.abort("User cancelled");
@@ -150,6 +177,8 @@ export async function readPaymentStatus(txid) {
   }
 }
 export async function payMainnet({ to, amount, prompt, onSigned }) {
+  if (workspaceMode !== "real")
+    throw Error("Switch to My tab before sending real BCH.");
   if (busy) throw Error("A payment is already being prepared");
   if (!ready) {
     document.querySelector("#wallet-dialog").showModal();

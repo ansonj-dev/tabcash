@@ -1,0 +1,29 @@
+{
+  "name": "tabcash",
+  "version": "1.0.0",
+  "description": "TabCash is a local-first shared expense tab for groups who settle directly in Bitcoin Cash. It splits BCH expenses in satoshis, calculates a compact set of paybacks, and creates a wallet payment URI when a recipient has added a BCH address. The application never takes custody of funds.",
+  "main": "app.js",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 4100",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4100",
+    "test": "node --test",
+    "check:local": "node scripts/check-submission.js",
+    "check:submission": "node scripts/check-submission.js --strict",
+    "package:preview": "npm test && npm run build && node scripts/package-release.js --preview",
+    "package:release": "npm test && npm run check:submission && npm run build && node scripts/package-release.js",
+    "smoke:release": "node scripts/smoke-release.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@bitauth/libauth": "^3.1.0-next.8",
+    "@wizardconnect/core": "^0.2.11",
+    "@wizardconnect/dapp": "^0.2.8",
+    "cashscript": "^0.14.0",
+    "qrcode": "^1.5.4",
+    "vite": "^8.3.8"
+  }
+}

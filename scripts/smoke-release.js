@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-const child = spawn(process.execPath, ["node_modules/vite/bin/vite.js", "preview", "--host", "127.0.0.1", "--port", "14100", "--strictPort"], { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+const child = spawn(process.execPath, ["node_modules/vite/bin/vite.js", "preview", "--host", "127.0.0.1", "--port", "14100", "--strictPort"], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
 let output = "";
 child.stdout.on("data", data => { output += data; });
 child.stderr.on("data", data => { output += data; });
@@ -9,7 +9,7 @@ try {
     if (child.exitCode !== null) throw Error(output);
     await new Promise(resolve => setTimeout(resolve, 100));
   }
-  if (!output.includes("Local:") || child.exitCode !== null) throw Error(output || "Preview did not start");
+  if (!output.replace(/\x1b\[[0-9;]*m/g, "").includes("Local:") || child.exitCode !== null) throw Error(output || "Preview did not start");
   const root = "http://127.0.0.1:14100";
   const page = await fetch(root + "/");
   if (page.status !== 200) throw Error("Production index did not load");

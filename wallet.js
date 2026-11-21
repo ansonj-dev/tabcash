@@ -16,8 +16,10 @@ import {
   hashTransactionUiOrder,
 } from "@bitauth/libauth";
 import QRCode from "qrcode";
+import { validMainnetAddress } from "./address.js";
 import iconUrl from "./icon.svg?url";
 
+export { validMainnetAddress };
 let manager;
 let workspaceMode = "sample";
 const provider = new ElectrumNetworkProvider("mainnet");
@@ -54,11 +56,6 @@ const address = (path, index) => {
   if (!publicKey) throw Error("Wallet must share receive and change HD paths");
   return publicKeyToP2pkhCashAddress({ publicKey, prefix: "bitcoincash" })
     .address;
-};
-export const validMainnetAddress = (value) => {
-  if (typeof value !== "string" || !value.startsWith("bitcoincash:"))
-    return false;
-  return typeof cashAddressToLockingBytecode(value) !== "string";
 };
 export function walletPanel() {
   const newManager = () => {

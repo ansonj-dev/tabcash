@@ -1,123 +1,89 @@
-import { validateSubmission } from "./submission-validation.js";
 import { validateImport, balancesFor, planFor } from "./ledger.js";
 import { validMainnetAddress } from "./address.js";
-// wallet.js pulls in the signing stack; load it on demand.
-let _wallet, walletBound = false;
+
+/* ---------- wallet (code-split) ----------
+   wallet.js pulls in the signing stack, so it loads only on demand. It starts in a
+   "sample" workspace that disables the connect button, so we switch it to "real"
+   right after it loads. */
+let _wallet,
+  walletBound = false;
 const loadWallet = () => (_wallet ??= import("./wallet.js"));
-const initWallet = async () => {
-  const w = await loadWallet();
-  if (!walletBound) {
-    walletBound = true;
+let _init;
+const initWallet = () =>
+  (_init ??= loadWallet().then((w) => {
     w.walletPanel();
-    w.setWalletWorkspace(mode);
-  }
-  return w;
-};
-import { submission } from "./submission.js";
+    w.setWalletWorkspace("real");
+    walletBound = true;
+    return w;
+  })).catch((error) => {
+    _wallet = _init = undefined; // allow a retry after a network failure
+    throw error;
+  });
 
+/* ---------- state: one real workspace ---------- */
 const LEGACY_STORAGE_KEY = "tabcash:v1";
-const SAMPLE_STORAGE_KEY = "tabcash:v2:sample";
-const REAL_STORAGE_KEY = "tabcash:v2:real";
-const GUIDE_KEY = "tabcash:guide-dismissed";
+const STORAGE_KEY = "tabcash:v2:real";
 const NS = "http://www.w3.org/2000/svg";
-
-const DEMO = {
-  version: 1,
-  title: "Weekend in Austin",
-  me: "p-jordan",
-  people: [
-    { id: "p-jordan", name: "Jordan Lee", address: "", color: "#9ccf65" },
-    { id: "p-maya", name: "Maya Chen", address: "", color: "#df9d72" },
-    { id: "p-theo", name: "Theo James", address: "", color: "#83aeda" },
-    { id: "p-noor", name: "Noor Patel", address: "", color: "#c39be8" },
-  ],
-  events: [
-    { id: "e-1", type: "expense", description: "Dinner at Lazarus Brewing", amount: 1200000, payer: "p-jordan", split: ["p-jordan", "p-maya", "p-theo", "p-noor"], at: "2026-11-18T20:32:00.000Z" },
-    { id: "e-2", type: "expense", description: "Ride to the trailhead", amount: 400000, payer: "p-maya", split: ["p-jordan", "p-maya", "p-theo"], at: "2026-11-18T16:05:00.000Z" },
-    { id: "e-3", type: "expense", description: "Groceries and coffee", amount: 800000, payer: "p-noor", split: ["p-jordan", "p-maya", "p-theo", "p-noor"], at: "2026-11-17T18:12:00.000Z" },
-    { id: "e-4", type: "expense", description: "Snacks for the drive", amount: 100000, payer: "p-theo", split: ["p-theo", "p-jordan", "p-maya"], at: "2026-11-17T10:44:00.000Z" },
-  ],
-};
-const EMPTY_REAL_TAB = {
+const PALETTE = ["#ffc766", "#ff8a6b", "#3be0a8", "#b8a1ff", "#6cc7ff", "#ff8fb1", "#e8d36a"];
+const EMPTY_TAB = {
   version: 1,
   title: "My BCH tab",
   me: "p-you",
-  people: [{ id: "p-you", name: "You", address: "", color: "#9ccf65" }],
+  people: [{ id: "p-you", name: "You", address: "", color: PALETTE[0] }],
   events: [],
 };
-const palette = ["#9ccf65", "#df9d72", "#83aeda", "#c39be8", "#6fd1bc", "#e08db0", "#d3bd69"];
-
-let migratedLegacyData = false;
-let mode = initialMode();
-let state = loadState(mode);
+let migratedLegacy = false;
+let state = loadState();
 let currentFilter = "all";
 let toastTimer;
 
 const $ = (selector) => document.querySelector(selector);
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-function initialMode() {
-  if (localStorage.getItem(REAL_STORAGE_KEY) === null) {
-    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (legacy) {
-      try {
-        const value = JSON.parse(legacy);
-        if (validateImport(value)) {
-          localStorage.setItem(REAL_STORAGE_KEY, JSON.stringify(value));
-          localStorage.removeItem(LEGACY_STORAGE_KEY);
-          migratedLegacyData = true;
-          return "real";
-        }
-      } catch {
-        /* Keep unreadable legacy data untouched for recovery. */
-      }
-    }
-  }
-  // Every page load lands in My tab; the stored mode no longer picks the initial workspace.
-  return "real";
-}
-function loadState(workspaceMode) {
+function migrateLegacy() {
+  if (localStorage.getItem(STORAGE_KEY) !== null) return;
+  const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+  if (!legacy) return;
   try {
-    const key = workspaceMode === "sample" ? SAMPLE_STORAGE_KEY : REAL_STORAGE_KEY;
-    const value = JSON.parse(localStorage.getItem(key));
+    const value = JSON.parse(legacy);
+    if (validateImport(value)) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      migratedLegacy = true;
+    }
+  } catch {
+    /* Keep unreadable legacy data untouched for recovery. */
+  }
+}
+function loadState() {
+  try {
+    migrateLegacy();
+    const value = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (validateImport(value)) return value;
   } catch {
-    /* Start with the mode's safe default if saved data is unreadable. */
+    /* Fall through to an empty tab if saved data is unreadable. */
   }
-  return structuredClone(workspaceMode === "sample" ? DEMO : EMPTY_REAL_TAB);
+  return structuredClone(EMPTY_TAB);
 }
 function save() {
-  const key = mode === "sample" ? SAMPLE_STORAGE_KEY : REAL_STORAGE_KEY;
-  localStorage.setItem(key, JSON.stringify(state));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
-function id(prefix) {
-  return `${prefix}-${crypto.randomUUID()}`;
+
+/* ---------- helpers ---------- */
+const id = (prefix) => `${prefix}-${crypto.randomUUID()}`;
+const satoshi = (value) => Math.round(Number(value) * 1e8);
+const bch = (value, decimals = 8) => (value / 1e8).toFixed(decimals);
+const shortBch = (value) => `${bch(value)} BCH`;
+const sum = (items, key) => items.reduce((total, item) => total + item[key], 0);
+const initials = (name) =>
+  name.split(/\s+/).slice(0, 2).map((part) => part[0] || "").join("").toUpperCase();
+const signOf = (v) => (v > 0 ? "+" : v < 0 ? "\u2212" : "");
+
+function colorOf(member, index = 0) {
+  return /^#[0-9a-f]{6}$/i.test(member.color) ? member.color : PALETTE[index % PALETTE.length];
 }
 function person(pid) {
-  return (
-    state.people.find((p) => p.id === pid) || { id: pid, name: "Former member", color: "#859187", address: "" }
-  );
-}
-function satoshi(value) {
-  return Math.round(Number(value) * 1e8);
-}
-function bch(value, decimals = 8) {
-  return (value / 1e8).toFixed(decimals);
-}
-function shortBch(value) {
-  return `${bch(value, 8)} BCH`;
-}
-function initials(name) {
-  return name.split(/\s+/).slice(0, 2).map((part) => part[0] || "").join("").toUpperCase();
-}
-function sum(items, key) {
-  return items.reduce((total, item) => total + item[key], 0);
-}
-function balances() {
-  return balancesFor(state);
-}
-function planFrom(net = balances()) {
-  return planFor(net);
+  return state.people.find((p) => p.id === pid) || { id: pid, name: "Former member", color: "#bdb7cf", address: "" };
 }
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -131,30 +97,42 @@ function svg(tag, attrs = {}, text) {
   if (text !== undefined) node.textContent = text;
   return node;
 }
-function tint(node, color) {
-  node.style.background = `${color}22`;
-  node.style.color = color;
+function button(label, className, onclick) {
+  const node = el("button", className, label);
+  node.type = "button";
+  if (onclick) node.addEventListener("click", onclick);
+  return node;
+}
+// Avatar: solid color chip with dark or light initials, whichever reads better.
+function avatar(member, small = false) {
+  const color = colorOf(member, state.people.indexOf(member));
+  const n = parseInt(color.slice(1), 16);
+  const lin = (c) => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const lum = 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  const node = el("span", small ? "avatar sm" : "avatar", initials(member.name));
+  node.style.background = color;
+  node.style.color = lum > 0.18 ? "#1a0f1f" : "#fbf4ea";
+  node.title = member.name;
+  return node;
 }
 function dateGroup(value) {
   const date = new Date(value);
   const today = new Date();
-  if (date.toDateString() === today.toDateString()) return "TODAY";
+  if (date.toDateString() === today.toDateString()) return "Today";
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return "YESTERDAY";
-  return new Intl.DateTimeFormat("en", { weekday: "long", month: "short", day: "numeric" })
-    .format(date)
-    .toUpperCase();
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return new Intl.DateTimeFormat("en", { weekday: "long", month: "short", day: "numeric" }).format(date);
 }
-function fmtTime(value) {
-  return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
-}
+const fmtTime = (value) =>
+  new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+
 function showToast(message) {
   const node = $("#toast");
   node.textContent = message;
   node.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => node.classList.remove("show"), 2800);
+  toastTimer = setTimeout(() => node.classList.remove("show"), 3600);
 }
 async function copy(text, message = "Copied to clipboard") {
   try {
@@ -162,8 +140,7 @@ async function copy(text, message = "Copied to clipboard") {
   } catch {
     const temp = el("textarea");
     temp.value = text;
-    temp.style.position = "fixed";
-    temp.style.opacity = "0";
+    temp.style.cssText = "position:fixed;opacity:0";
     document.body.append(temp);
     temp.select();
     document.execCommand("copy");
@@ -174,89 +151,86 @@ async function copy(text, message = "Copied to clipboard") {
 function paymentUri(receiver, amount) {
   const address = person(receiver).address.trim();
   if (!validMainnetAddress(address)) return null;
-  return `bitcoincash:${address.replace(/^bitcoincash:/, "")}?amount=${bch(amount, 8)}`;
+  return `bitcoincash:${address.replace(/^bitcoincash:/, "")}?amount=${bch(amount)}`;
 }
-function emptyState(mark, title, body) {
+function emptyState(mark, title, body, action) {
   const empty = el("div", "empty-state");
   empty.append(el("div", "empty-mark", mark), el("b", "", title));
   if (body) empty.append(el("p", "", body));
+  if (action) empty.append(action);
   return empty;
 }
 
 /* ---------- render ---------- */
 function render() {
-  const net = balances();
+  const net = balancesFor(state);
   const myNet = net[state.me] || 0;
   const expenses = state.events.filter((event) => event.type === "expense");
   const total = sum(expenses, "amount");
-  const plan = planFrom(net);
+  const plan = planFor(net);
   $("#group-title").textContent = state.title;
   $("#people-count").textContent = state.people.length;
   $("#total-spent").textContent = bch(total);
-  $("#expense-count").textContent = `${expenses.length} ${expenses.length === 1 ? "expense" : "expenses"} recorded`;
+  $("#expense-count").textContent = expenses.length
+    ? `${expenses.length} ${expenses.length === 1 ? "expense" : "expenses"} recorded`
+    : "No expenses yet";
   $("#owed-to-you").textContent = bch(Math.max(myNet, 0));
   $("#you-owe").textContent = bch(Math.max(-myNet, 0));
-  $("#owed-note").textContent =
-    myNet > 0 ? `Across ${Object.values(net).filter((x) => x < 0).length} people` : "Nothing owed yet";
+  const debtors = Object.values(net).filter((x) => x < 0).length;
+  $("#owed-note").textContent = myNet > 0 ? `From ${debtors} ${debtors === 1 ? "person" : "people"}` : "Nothing owed to you";
   const status = $("#settlement-status");
-  status.textContent = myNet === 0 ? "ALL CLEAR" : myNet > 0 ? "YOU\u2019RE OWED" : "YOU OWE";
+  status.textContent = myNet === 0 ? "All clear" : myNet > 0 ? "\u25B2 You\u2019re owed" : "\u25BC You owe";
   status.dataset.tone = myNet === 0 ? "even" : myNet > 0 ? "pos" : "neg";
   $("#expense-filter-count").textContent = expenses.length;
-  renderHero(total, expenses.length, plan, net);
   renderPeople(net);
   renderActivity();
   renderPlan(plan);
   renderInsights(net, plan, expenses, total);
 }
-function renderHero(total, count, plan, net) {
-  $("#hero-title").textContent = state.title;
-  $("#hero-total").textContent = bch(total);
-  $("#hero-sub").textContent = `${count} ${count === 1 ? "expense" : "expenses"} \u00b7 ${state.people.length} ${state.people.length === 1 ? "person" : "people"}`;
-  $("#hero-transfers").textContent = plan.length;
-  const debtors = Object.values(net).filter((x) => x < 0).length;
-  $("#hero-naive").textContent = plan.length
-    ? `Balances are netted into ${plan.length} payback${plan.length === 1 ? "" : "s"} for ${debtors} ${debtors === 1 ? "debtor" : "debtors"}.`
-    : "Nothing to pay back right now.";
-  const root = $("#hero-avatars");
-  root.replaceChildren();
-  for (const member of state.people.slice(0, 6)) {
-    const a = el("span", "avatar", initials(member.name));
-    a.title = member.name;
-    tint(a, member.color);
-    root.append(a);
-  }
-}
+
 function renderPeople(net) {
   const root = $("#people-list");
   root.replaceChildren();
   for (const member of state.people) {
     const row = el("div", "person-row");
-    const avatar = el("span", "avatar", initials(member.name));
-    tint(avatar, member.color);
-    const text = el("button", "person-edit");
-    text.type = "button";
+    const text = button("", "person-edit");
     text.append(
       el("span", "person-name", member.name + (member.id === state.me && member.name !== "You" ? " \u00b7 you" : "")),
-      el("span", "person-sub", member.address ? "Address saved \u00b7 click to edit" : "Click to add BCH address"),
+      el("span", "person-sub", member.address ? "Address saved \u00b7 edit" : "Add BCH address"),
     );
-    text.onclick = () => {
-      const value = prompt(`Mainnet BCH address for ${member.name}`, member.address || "");
-      if (value === null) return;
-      if (value && !validMainnetAddress(value.trim())) {
-        showToast("Enter a valid full bitcoincash: address");
-        return;
-      }
-      member.address = value.trim();
-      save();
-      render();
-    };
+    text.addEventListener("click", () =>
+      openField({
+        title: `Address for ${member.name}`,
+        label: "Mainnet Bitcoin Cash address",
+        value: member.address || "",
+        placeholder: "bitcoincash:q\u2026",
+        optional: true,
+        validate: (v) => (v && !validMainnetAddress(v) ? "Enter a valid full bitcoincash: address" : null),
+        apply: (v) => {
+          member.address = v;
+          save();
+          render();
+          showToast("Address saved");
+        },
+      }),
+    );
     const val = net[member.id] || 0;
-    const balance = el("div", `person-balance ${val > 0 ? "pos" : val < 0 ? "neg" : ""}`, `${val > 0 ? "+" : val < 0 ? "\u2212" : ""}${bch(Math.abs(val), 4)}`);
-    balance.append(el("small", "", "BCH"));
-    row.append(avatar, text, balance);
+    const tone = val > 0 ? "pos" : val < 0 ? "neg" : "";
+    const balance = el("div", `person-balance ${tone}`);
+    balance.append(
+      el("span", "amt", `${signOf(val)}${bch(Math.abs(val), 4)}`),
+      el("small", "", val > 0 ? "BCH \u00b7 owed" : val < 0 ? "BCH \u00b7 owes" : "BCH \u00b7 even"),
+    );
+    row.append(avatar(member), text, balance);
     root.append(row);
   }
+  if (state.people.length < 2) {
+    root.append(
+      emptyState("\u263A", "Add people to your tab", "Add the friends you split costs with to start sharing expenses.", button("+ Add person", "btn btn-primary btn-sm", () => openPersonDialog())),
+    );
+  }
 }
+
 function renderActivity() {
   const root = $("#activity-list");
   root.replaceChildren();
@@ -264,137 +238,138 @@ function renderActivity() {
     .filter((event) => currentFilter === "all" || event.type === currentFilter)
     .sort((a, b) => new Date(b.at) - new Date(a.at));
   if (!shown.length) {
-    const settlements = currentFilter === "settlement";
-    root.append(
-      emptyState(
-        settlements ? "\u2197" : "+",
-        settlements ? "No settlements recorded" : mode === "real" ? "Add your first shared expense" : "No expenses yet",
-        settlements
-          ? "Settlements you mark complete will show up here."
-          : "Add your first shared expense and TabCash will split it in exact satoshis.",
-      ),
-    );
-    if (currentFilter !== "settlement" && mode === "real") {
-      const cta = el("button", "btn btn-primary", "+ Add your first shared expense");
-      cta.type = "button";
-      cta.onclick = () => $("#add-expense").click();
-      root.firstChild.append(cta);
+    if (currentFilter === "settlement") {
+      root.append(emptyState("\u2197", "No settlements recorded", "Payments you record as confirmed will show up here."));
+    } else if (state.people.length < 2) {
+      root.append(emptyState("\u263A", "Add people to your tab", "Start by adding the people you share costs with.", button("+ Add person", "btn btn-primary", () => openPersonDialog())));
+    } else {
+      root.append(emptyState("+", "Add your first expense", "TabCash splits it in exact satoshis and works out who owes whom.", button("+ Add your first expense", "btn btn-primary", openExpenseDialog)));
     }
     return;
   }
   const groups = new Map();
-  shown.forEach((event) => {
+  for (const event of shown) {
     const key = dateGroup(event.at);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(event);
-  });
+  }
   for (const [day, events] of groups) {
     root.append(el("div", "day-heading", day));
     for (const event of events) {
+      const expense = event.type === "expense";
       const row = el("div", "activity-row");
-      const icon = el("div", `activity-icon ${event.type === "settlement" ? "settlement" : ""}`, event.type === "settlement" ? "\u2197" : "\u2198");
+      const icon = el("div", `activity-icon ${expense ? "" : "settlement"}`, expense ? "\u2198" : "\u2197");
+      icon.setAttribute("aria-hidden", "true");
       const body = el("div");
-      const title = event.type === "expense" ? event.description : `${person(event.from).name} paid ${person(event.to).name}`;
-      body.append(el("div", "activity-title", title));
       body.append(
+        el("div", "activity-title", expense ? event.description : `${person(event.from).name} paid ${person(event.to).name}`),
         el(
           "div",
           "activity-meta",
-          event.type === "expense"
-            ? `Paid by ${person(event.payer).name} \u00b7 ${event.split.length} people \u00b7 ${fmtTime(event.at)}`
+          expense
+            ? `Paid by ${person(event.payer).name} \u00b7 split ${event.split.length} ${event.split.length === 1 ? "way" : "ways"} \u00b7 ${fmtTime(event.at)}`
             : `Settlement \u00b7 ${fmtTime(event.at)}`,
         ),
       );
-      const amount = el("div", `activity-amount${event.type === "settlement" ? " paid-back" : ""}`, event.type === "expense" ? `\u2212${bch(event.amount, 6)}` : bch(event.amount, 6));
-      amount.append(el("small", "", event.type === "expense" ? "shared expense" : "paid back"));
+      const amount = el("div", `activity-amount ${expense ? "" : "paid-back"}`, `${expense ? "\u2212" : "+"}${bch(event.amount, 6)}`);
+      amount.append(el("small", "", expense ? "shared expense" : "paid back"));
       row.append(icon, body, amount);
       root.append(row);
     }
   }
 }
+
 function renderPlan(plan) {
   const root = $("#settlement-list");
   root.replaceChildren();
   if (!plan.length) {
-    root.append(emptyState("\u2713", "Everyone is even", "Nice work. Nothing left to pay back."));
+    root.append(
+      state.events.length
+        ? emptyState("\u2713", "Everyone is even", "Nothing left to pay back.")
+        : emptyState("\u25CC", "No paybacks yet", "Suggested transfers appear after your first expense."),
+    );
     return;
   }
   for (const item of plan.slice(0, 3)) {
-    const row = el("button", "settlement-item");
-    row.type = "button";
+    const row = button("", "settlement-item");
     row.title = "Copy a payment request for this transfer";
-    const from = el("span", "avatar sm", initials(person(item.from).name));
-    tint(from, person(item.from).color);
-    const to = el("span", "avatar sm", initials(person(item.to).name));
-    tint(to, person(item.to).color);
     row.append(
-      from,
+      avatar(person(item.from), true),
       el("span", "", person(item.from).name.split(" ")[0]),
       el("span", "settle-arrow", "\u2192"),
-      to,
+      avatar(person(item.to), true),
       el("span", "", person(item.to).name.split(" ")[0]),
       el("span", "settle-amount", bch(item.amount, 4)),
     );
-    row.addEventListener("click", () => requestPayment(item));
+    row.addEventListener("click", () => {
+      const uri = paymentUri(item.to, item.amount);
+      if (uri) copy(uri, "Payment request copied \u2014 review it in your wallet");
+      else showToast(`${person(item.to).name} needs a BCH address first`);
+    });
     root.append(row);
   }
-  if (plan.length > 3) root.append(el("div", "settlement-more", `+ ${plan.length - 3} more transfers in the full plan`));
-}
-function requestPayment(item) {
-  if (mode !== "real") {
-    showToast("Payment requests are available in My tab, not in the sample demo.");
-    return;
-  }
-  const uri = paymentUri(item.to, item.amount);
-  if (uri) copy(uri, "Payment request copied \u2014 review it in your wallet");
-  else showToast(`${person(item.to).name} needs to add a BCH address first`);
+  if (plan.length > 3) root.append(el("div", "settlement-more", `+ ${plan.length - 3} more in the full plan`));
 }
 
-/* ---------- insights (presentation-only, derived from events) ---------- */
+/* ---------- insights (derived from events, never stored) ---------- */
 function renderInsights(net, plan, expenses, total) {
+  const none = !expenses.length;
+  $("#insights-body").hidden = none;
+  const empty = $("#insights-empty");
+  empty.hidden = !none;
+  empty.replaceChildren();
+  if (none) {
+    empty.append(emptyState("\u25D4", "Insights start with your first expense", "Totals, balances and the settlement flow appear here as your tab grows."));
+    return;
+  }
   const stats = $("#insight-stats");
   stats.replaceChildren();
   const settled = sum(state.events.filter((e) => e.type === "settlement"), "amount");
   const biggest = expenses.reduce((best, e) => (!best || e.amount > best.amount ? e : best), null);
   const paid = {};
   for (const e of expenses) paid[e.payer] = (paid[e.payer] || 0) + e.amount;
-  const topPayerId = Object.keys(paid).sort((a, b) => paid[b] - paid[a])[0];
-  const average = state.people.length ? Math.floor(total / state.people.length) : 0;
+  const topPayer = Object.keys(paid).sort((a, b) => paid[b] - paid[a])[0];
+  const average = Math.floor(total / state.people.length);
   const tiles = [
-    ["TOTAL SPENT", `${bch(total)} BCH`, `${expenses.length} ${expenses.length === 1 ? "expense" : "expenses"}`],
-    ["BIGGEST EXPENSE", biggest ? `${bch(biggest.amount)} BCH` : "\u2014", biggest ? biggest.description : "Add an expense to see this"],
-    ["AVERAGE PER PERSON", `${bch(average)} BCH`, `Across ${state.people.length} ${state.people.length === 1 ? "person" : "people"} (rounded down)`],
-    ["TOP PAYER", topPayerId ? person(topPayerId).name : "\u2014", topPayerId ? `Fronted ${bch(paid[topPayerId])} BCH` : "No one has paid yet"],
-    ["SETTLED SO FAR", `${bch(settled)} BCH`, "Recorded settlements only"],
-    ["PAYBACKS LEFT", String(plan.length), plan.length ? `${bch(sum(plan, "amount"))} BCH still to move` : "All even"],
+    ["Total spent", `${bch(total)} BCH`, `${expenses.length} ${expenses.length === 1 ? "expense" : "expenses"}`],
+    ["Biggest expense", `${bch(biggest.amount)} BCH`, biggest.description],
+    ["Average per person", `${bch(average)} BCH`, `Across ${state.people.length} ${state.people.length === 1 ? "person" : "people"}, rounded down`],
+    ["Top payer", person(topPayer).name, `Fronted ${bch(paid[topPayer])} BCH`],
+    ["Settled so far", `${bch(settled)} BCH`, "Recorded settlements only"],
+    ["Paybacks left", String(plan.length), plan.length ? `${bch(sum(plan, "amount"))} BCH still to move` : "All even"],
   ];
   for (const [label, value, foot] of tiles) {
-    const card = el("article", "card stat reveal in");
-    card.append(el("div", "stat-label", label), el("div", "stat-value sm", value), el("div", "stat-foot", foot));
+    const card = el("article", "glass stat");
+    card.append(el("h3", "stat-label", label), el("p", "stat-value sm", value), el("p", "stat-foot", foot));
     stats.append(card);
   }
   renderBars(net);
   renderFlow(plan);
 }
+
 function renderBars(net) {
   const root = $("#balance-bars");
   root.replaceChildren();
   const max = Math.max(1, ...Object.values(net).map((v) => Math.abs(v)));
   for (const member of state.people) {
     const val = net[member.id] || 0;
+    const tone = val > 0 ? "pos" : val < 0 ? "neg" : "";
     const row = el("div", "bar-row");
-    const name = el("div", "bar-name", member.name);
     const track = el("div", "bar-track");
     track.setAttribute("role", "img");
-    track.setAttribute("aria-label", `${member.name}: ${val > 0 ? "is owed" : val < 0 ? "owes" : "is even,"} ${bch(Math.abs(val))} BCH`);
-    const fill = el("span", `bar-fill ${val > 0 ? "pos" : val < 0 ? "neg" : ""}`);
+    track.setAttribute("aria-label", `${member.name} ${val > 0 ? "is owed" : val < 0 ? "owes" : "is even,"} ${bch(Math.abs(val))} BCH`);
+    const fill = el("span", `bar-fill ${tone}`);
     fill.style.width = `${(Math.abs(val) / max) * 50}%`;
     track.append(fill);
-    const amount = el("div", `bar-amount ${val > 0 ? "pos" : val < 0 ? "neg" : ""}`, `${val > 0 ? "+" : val < 0 ? "\u2212" : ""}${bch(Math.abs(val), 6)}`);
-    row.append(name, track, amount);
+    row.append(
+      el("div", "bar-name", member.name),
+      track,
+      el("div", `bar-amount ${tone}`, `${signOf(val)}${bch(Math.abs(val), 6)}`),
+    );
     root.append(row);
   }
 }
+
 function renderFlow(plan) {
   const root = $("#flow");
   root.replaceChildren();
@@ -406,34 +381,32 @@ function renderFlow(plan) {
   const payees = [...new Set(plan.map((p) => p.to))];
   const rowH = 54;
   const H = Math.max(payers.length, payees.length) * rowH + 20;
-  const W = 560;
-  const xL = 150;
-  const xR = W - 150;
+  const W = 560, xL = 150, xR = W - 150, mid = W / 2;
   const yOf = (list, pid) => 10 + list.indexOf(pid) * rowH + rowH / 2;
   const maxAmount = Math.max(...plan.map((p) => p.amount));
   const chart = svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "flow-svg", role: "img", "aria-label": `${plan.length} suggested transfers` });
-  const desc = svg("title", {}, plan.map((p) => `${person(p.from).name} pays ${person(p.to).name} ${shortBch(p.amount)}`).join(". "));
-  chart.append(desc);
+  chart.append(svg("title", {}, plan.map((p) => `${person(p.from).name} pays ${person(p.to).name} ${shortBch(p.amount)}`).join(". ")));
   plan.forEach((p, i) => {
-    const y1 = yOf(payers, p.from);
-    const y2 = yOf(payees, p.to);
-    const mid = (xL + xR) / 2;
+    const y1 = yOf(payers, p.from), y2 = yOf(payees, p.to);
     const path = svg("path", {
       d: `M${xL} ${y1} C${mid} ${y1}, ${mid} ${y2}, ${xR} ${y2}`,
       class: "flow-link",
       "stroke-width": String(3 + (p.amount / maxAmount) * 12),
     });
     path.style.setProperty("--i", i);
-    chart.append(path);
-    const label = svg("text", { x: String(mid), y: String((y1 + y2) / 2 - 8), class: "flow-label", "text-anchor": "middle" }, bch(p.amount, 4));
-    chart.append(label);
+    const label = bch(p.amount, 4), pw = label.length * 8 + 18, cy = (y1 + y2) / 2;
+    chart.append(
+      path,
+      svg("rect", { x: String(mid - pw / 2), y: String(cy - 12), width: String(pw), height: "22", rx: "11", class: "flow-pill" }),
+      svg("text", { x: String(mid), y: String(cy + 4), class: "flow-label", "text-anchor": "middle" }, label),
+    );
   });
   const node = (list, x, anchor, pid) => {
-    const y = yOf(list, pid);
-    const m = person(pid);
-    chart.append(svg("circle", { cx: String(x), cy: String(y), r: "7", fill: m.color, class: `flow-dot ${list === payers ? "pay" : "recv"}` }));
-    const dx = anchor === "end" ? -16 : 16;
-    chart.append(svg("text", { x: String(x + dx), y: String(y + 4), class: "flow-name", "text-anchor": anchor }, m.name));
+    const y = yOf(list, pid), m = person(pid);
+    chart.append(
+      svg("circle", { cx: String(x), cy: String(y), r: "7", fill: colorOf(m, state.people.indexOf(m)), class: "flow-dot" }),
+      svg("text", { x: String(x + (anchor === "end" ? -16 : 16)), y: String(y + 4), class: "flow-name", "text-anchor": anchor }, m.name),
+    );
   };
   payers.forEach((pid) => node(payers, xL, "end", pid));
   payees.forEach((pid) => node(payees, xR, "start", pid));
@@ -442,61 +415,12 @@ function renderFlow(plan) {
   root.append(chart, legend);
 }
 
-/* ---------- workspace mode ---------- */
-function renderMode() {
-  const isSample = mode === "sample";
-  document.body.dataset.workspaceMode = mode;
-  $("#sample-mode").setAttribute("aria-pressed", String(isSample));
-  $("#real-mode").setAttribute("aria-pressed", String(!isSample));
-  $("#hero-mode-label").textContent = isSample ? "SAMPLE DEMO" : "MY TAB";
-  const notice = $("#mode-notice");
-  notice.classList.toggle("sample-mode", isSample);
-  notice.classList.toggle("real-mode", !isSample);
-  notice.replaceChildren(
-    el("b", "mode-label", isSample ? "SAMPLE DEMO" : "MY TAB"),
-    el(
-      "span",
-      "mode-description",
-      isSample
-        ? "Sample demo never sends BCH. Fictional Austin expenses; editing stays in this sample, and wallet payments and settlement records are disabled."
-        : "My tab uses real BCH mainnet. Your tab is saved only in this browser, and wallet payments send real BCH after you confirm them in your wallet.",
-    ),
-  );
-  if (migratedLegacyData && !isSample) {
-    notice.append(el("span", "migration-note", "Your saved tab from the previous version was preserved here."));
+/* ---------- dialogs ---------- */
+function openExpenseDialog() {
+  if (state.people.length < 2) {
+    openPersonDialog("Add at least one person to split costs with.");
+    return;
   }
-  $("#copy-plan-label").textContent = isSample ? "Copy sample plan" : "Copy plan";
-  $("#export-button").textContent = isSample ? "Export sample data" : "Export this tab";
-  const importButton = $("#import-button");
-  importButton.disabled = isSample;
-  importButton.title = isSample ? "Switch to My tab before importing a personal tab." : "Import a TabCash export into My tab.";
-  $("#plan-dialog .modal-desc").textContent = isSample
-    ? "This is sample data. Wallet payments and settlement records are disabled in the sample demo."
-    : "Pay through your connected wallet, or record a confirmed payment manually. Broadcasts are pending until mined; balances change only when you record payment.";
-  syncConnectButton();
-}
-function syncConnectButton() {
-  if (walletBound) return void _wallet.then((w) => w.setWalletWorkspace(mode));
-  const button = $("#connect-wallet");
-  const sample = mode !== "real";
-  button.disabled = sample;
-  button.textContent = sample ? "Wallet \u00b7 My tab only" : "Connect wallet";
-  button.title = sample ? "Switch to My tab before connecting a wallet." : "Connect a WizardConnect HD wallet on BCH mainnet.";
-  button.setAttribute("aria-label", sample ? "Wallet connection is available only in My tab" : button.textContent);
-}
-function switchMode(nextMode) {
-  if (nextMode === mode) return;
-  mode = nextMode === "real" ? "real" : "sample";
-  state = loadState(mode);
-  currentFilter = "all";
-  document.querySelectorAll(".filter").forEach((button) => button.classList.toggle("active", button.dataset.filter === "all"));
-  render();
-  renderMode();
-  showToast(mode === "sample" ? "Sample demo opened" : "My tab opened");
-}
-
-/* ---------- forms ---------- */
-function renderExpenseForm() {
   const payer = $("#payer-select");
   payer.replaceChildren();
   for (const member of state.people) {
@@ -514,44 +438,73 @@ function renderExpenseForm() {
     check.name = "split";
     check.value = member.id;
     check.checked = true;
-    label.append(check, el("span", "", `${initials(member.name)} ${member.name}`));
+    label.append(check, el("span", "", member.name));
     picker.append(label);
   }
+  $("#expense-dialog").showModal();
+}
+function openPersonDialog(note = "") {
+  $("#person-desc").textContent = note;
+  $("#person-desc").hidden = !note;
+  $("#person-dialog").showModal();
+}
+// One reusable single-field dialog for renaming the tab and editing addresses.
+let fieldSubmit;
+function openField({ title, label, value, placeholder = "", optional = false, validate, apply }) {
+  $("#field-h").textContent = title;
+  $("#field-label").textContent = label;
+  const input = $("#field-input");
+  input.value = value;
+  input.placeholder = placeholder;
+  input.required = !optional;
+  $("#field-error").hidden = true;
+  fieldSubmit = (raw) => {
+    const v = raw.trim();
+    const error = validate?.(v);
+    if (error) return error;
+    apply(v);
+    return null;
+  };
+  $("#field-dialog").showModal();
+  input.select();
 }
 function addPerson(name, address) {
   const cleanedName = name.trim();
-  if (!cleanedName) return;
+  if (!cleanedName) return false;
   if (state.people.some((member) => member.name.toLowerCase() === cleanedName.toLowerCase())) {
     showToast("That name is already in the tab");
-    return;
+    return false;
   }
-  state.people.push({ id: id("p"), name: cleanedName, address: address.trim(), color: palette[state.people.length % palette.length] });
+  const trimmed = address.trim();
+  if (trimmed && !validMainnetAddress(trimmed)) {
+    showToast("Enter a valid full bitcoincash: address, or leave it blank");
+    return false;
+  }
+  state.people.push({ id: id("p"), name: cleanedName, address: trimmed, color: PALETTE[state.people.length % PALETTE.length] });
   save();
   render();
   showToast(`${cleanedName} added to the tab`);
+  return true;
 }
+
 function openPlan() {
   const root = $("#plan-detail");
   root.replaceChildren();
-  const plan = planFrom();
-  if (!plan.length) root.append(emptyState("\u2713", "Your tab is all settled."));
+  const plan = planFor(balancesFor(state));
+  if (!plan.length) root.append(emptyState("\u2713", "Your tab is all settled", "Nothing left to pay back."));
   for (const item of plan) {
     const row = el("div", "plan-item");
-    row.append(el("span", "arrow", "\u2197"), el("span", "", `${person(item.from).name} pays ${person(item.to).name}`), el("span", "amount", shortBch(item.amount)));
-    const sampleMode = mode === "sample";
-    const pay = el("button", "btn btn-primary btn-sm", sampleMode ? "Switch to My tab to pay" : "Pay with connected wallet");
-    pay.type = "button";
-    pay.disabled = sampleMode;
-    if (sampleMode) pay.title = "Wallet payments are disabled in the sample demo.";
+    row.append(
+      el("span", "arrow", "\u2197"),
+      el("span", "who", `${person(item.from).name} pays ${person(item.to).name}`),
+      el("span", "amount", shortBch(item.amount)),
+    );
+    const pending = (state.payments || []).find((p) => p.from === item.from && p.to === item.to && p.amount === item.amount);
+    const pay = button(pending ? "Broadcast saved \u00b7 awaiting your confirmation" : "Pay with connected wallet", "btn btn-primary btn-sm");
+    pay.disabled = Boolean(pending);
     pay.addEventListener("click", async () => {
-      if (mode !== "real") {
-        showToast("Switch to My tab before sending real BCH.");
-        return;
-      }
       try {
         pay.disabled = true;
-        const already = (state.payments || []).find((p) => p.from === item.from && p.to === item.to && p.amount === item.amount);
-        if (already) throw Error(`A payment was already broadcast: ${already.txid}. Check it before sending again.`);
         const txid = await (await initWallet()).payMainnet({
           to: person(item.to).address,
           amount: item.amount,
@@ -562,69 +515,40 @@ function openPlan() {
             save();
           },
         });
-        const saved = state.payments.find((p) => p.txid === txid);
-        saved.status = "broadcast";
+        state.payments.find((p) => p.txid === txid).status = "broadcast";
         save();
-        const link = el("a", "payment-tx", `Broadcast accepted \u00b7 view ${txid.slice(0, 12)}\u2026`);
-        link.href = `https://explorer.bitcoinunlimited.info/tx/${txid}`;
-        link.target = "_blank";
-        link.rel = "noopener";
-        row.append(link);
+        row.append(txLink(txid, `Broadcast accepted \u00b7 view ${txid.slice(0, 12)}\u2026`));
         showToast("Broadcast accepted. Verify confirmation before recording payment.");
       } catch (e) {
         showToast(e.message);
         pay.disabled = false;
       }
     });
-    row.append(pay);
-    const mark = el("button", "btn btn-ghost btn-sm", sampleMode ? "Settlement records disabled in sample mode" : "Record confirmed payment manually");
-    mark.type = "button";
-    mark.disabled = sampleMode;
-    if (sampleMode) mark.title = "Sample settlements are never recorded as real payments.";
-    mark.addEventListener("click", () => {
-      if (mode !== "real") {
-        showToast("Switch to My tab before recording a settlement.");
-        return;
-      }
-      if (
-        !confirm(
-          `Have you independently confirmed ${person(item.from).name}'s ${shortBch(item.amount)} payment to ${person(item.to).name}? This is your manual record; TabCash has not verified confirmation.`,
-        )
-      )
-        return;
+    const mark = button("Record confirmed payment manually", "btn btn-glass btn-sm", () => {
+      if (!confirm(`Have you independently confirmed ${person(item.from).name}'s ${shortBch(item.amount)} payment to ${person(item.to).name}? This is your manual record; TabCash has not verified confirmation.`)) return;
       state.events.push({ id: id("s"), type: "settlement", from: item.from, to: item.to, amount: item.amount, at: new Date().toISOString() });
       save();
       render();
       $("#plan-dialog").close();
       showToast("Settlement recorded");
     });
-    row.append(mark);
-    const pending = (state.payments || []).find((p) => p.from === item.from && p.to === item.to && p.amount === item.amount);
+    row.append(pay, mark);
     if (pending && /^[a-f0-9]{64}$/.test(pending.txid)) {
-      pay.disabled = true;
-      pay.textContent = "Broadcast saved \u00b7 awaiting manual confirmation";
-      const link = el("a", "payment-tx", `View pending transaction ${pending.txid.slice(0, 12)}\u2026`);
-      link.href = `https://explorer.bitcoinunlimited.info/tx/${pending.txid}`;
-      link.target = "_blank";
-      link.rel = "noopener";
-      row.append(link);
-      const refresh = el("button", "btn btn-ghost btn-sm", "Read transaction status");
-      refresh.type = "button";
+      row.append(txLink(pending.txid, `View pending transaction ${pending.txid.slice(0, 12)}\u2026`));
       const observation = el(
         "p",
         "payment-tx",
-        pending.observation
-          ? `${pending.observation.status} \u00b7 ${pending.observation.observedAt}`
-          : "Status has not been queried. An interrupted broadcast may have an unknown outcome.",
+        pending.observation ? `${pending.observation.status} \u00b7 ${pending.observation.observedAt}` : "Status has not been queried. An interrupted broadcast may have an unknown outcome.",
       );
       observation.setAttribute("role", "status");
-      observation.setAttribute("aria-live", "polite");
+      const refresh = button("Read transaction status", "btn btn-glass btn-sm");
       refresh.onclick = async () => {
         refresh.disabled = true;
         try {
           pending.observation = await (await loadWallet()).readPaymentStatus(pending.txid);
           save();
-          observation.textContent = `${pending.observation.status}${pending.observation.confirmations !== null ? " (" + pending.observation.confirmations + " confirmations)" : ""}. ${pending.observation.source}.`;
+          const o = pending.observation;
+          observation.textContent = `${o.status}${o.confirmations !== null ? ` (${o.confirmations} confirmations)` : ""}. ${o.source}.`;
         } catch (e) {
           observation.textContent = e.message;
         } finally {
@@ -637,47 +561,61 @@ function openPlan() {
   }
   $("#plan-dialog").showModal();
 }
+function txLink(txid, label) {
+  const link = el("a", "payment-tx", label);
+  link.href = `https://explorer.bitcoinunlimited.info/tx/${txid}`;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  return link;
+}
 
 /* ---------- events ---------- */
-$("#add-expense").addEventListener("click", () => {
-  renderExpenseForm();
-  $("#expense-dialog").showModal();
-});
-$("#add-person").addEventListener("click", () => $("#person-dialog").showModal());
+$("#add-expense").addEventListener("click", openExpenseDialog);
+$("#add-person").addEventListener("click", () => openPersonDialog());
 $("#settle-all").addEventListener("click", openPlan);
 $("#copy-plan").addEventListener("click", () => {
-  const plan = planFrom();
-  const text = plan.length
-    ? plan.map((x) => `${person(x.from).name} \u2192 ${person(x.to).name}: ${shortBch(x.amount)}`).join("\n")
-    : "Everyone is settled.";
-  copy(text, "Settlement plan copied");
+  const plan = planFor(balancesFor(state));
+  copy(
+    plan.length ? plan.map((x) => `${person(x.from).name} \u2192 ${person(x.to).name}: ${shortBch(x.amount)}`).join("\n") : "Everyone is settled.",
+    "Settlement plan copied",
+  );
 });
-$("#edit-name").addEventListener("click", () => {
-  const title = prompt("Name this shared tab", state.title);
-  if (title?.trim()) {
-    state.title = title.trim().slice(0, 50);
-    save();
-    render();
+$("#edit-name").addEventListener("click", () =>
+  openField({
+    title: "Rename tab",
+    label: "Tab name",
+    value: state.title,
+    validate: (v) => (v ? null : "Enter a name"),
+    apply: (v) => {
+      state.title = v.slice(0, 50);
+      save();
+      render();
+    },
+  }),
+);
+$("#field-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const error = fieldSubmit?.($("#field-input").value);
+  if (error) {
+    const node = $("#field-error");
+    node.textContent = error;
+    node.hidden = false;
+    $("#field-input").focus();
+    return;
   }
+  $("#field-dialog").close();
 });
 $("#expense-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
   const amount = satoshi(form.get("amount"));
   const split = form.getAll("split");
-  if (!Number.isSafeInteger(amount) || amount <= 0 || !split.length) {
-    showToast("Enter an amount and choose at least one person");
+  const description = String(form.get("description")).trim();
+  if (!description || !Number.isSafeInteger(amount) || amount <= 0 || !split.length) {
+    showToast("Add a description, an amount and at least one person");
     return;
   }
-  state.events.push({
-    id: id("e"),
-    type: "expense",
-    description: String(form.get("description")).trim(),
-    amount,
-    payer: String(form.get("payer")),
-    split,
-    at: new Date().toISOString(),
-  });
+  state.events.push({ id: id("e"), type: "expense", description, amount, payer: String(form.get("payer")), split, at: new Date().toISOString() });
   save();
   render();
   event.currentTarget.reset();
@@ -687,36 +625,36 @@ $("#expense-form").addEventListener("submit", (event) => {
 $("#person-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
-  addPerson(String(data.get("name")), String(data.get("address")));
+  if (!addPerson(String(data.get("name")), String(data.get("address")))) return;
   event.currentTarget.reset();
   $("#person-dialog").close();
 });
-document.querySelectorAll("[data-close]").forEach((button) =>
-  button.addEventListener("click", () => document.getElementById(button.dataset.close).close()),
+document.querySelectorAll("[data-close]").forEach((b) =>
+  b.addEventListener("click", () => document.getElementById(b.dataset.close).close()),
 );
-// Click on the dialog backdrop closes it.
+// A click on the dialog backdrop closes it.
 document.querySelectorAll("dialog").forEach((dialog) =>
   dialog.addEventListener("mousedown", (event) => {
+    if (event.target !== dialog) return;
     const r = dialog.getBoundingClientRect();
-    const outside = event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom;
-    if (event.target === dialog && outside) dialog.close();
+    if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) dialog.close();
   }),
 );
-document.querySelectorAll(".filter").forEach((button) =>
-  button.addEventListener("click", () => {
-    currentFilter = button.dataset.filter;
-    document.querySelectorAll(".filter").forEach((item) => item.classList.toggle("active", item === button));
+document.querySelectorAll(".filter").forEach((b) =>
+  b.addEventListener("click", () => {
+    currentFilter = b.dataset.filter;
+    document.querySelectorAll(".filter").forEach((item) => {
+      item.classList.toggle("active", item === b);
+      item.setAttribute("aria-pressed", String(item === b));
+    });
     renderActivity();
   }),
 );
 $("#export-button").addEventListener("click", () => {
-  const exported = { ...state, workspaceMode: mode };
-  const blob = new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }));
   const anchor = el("a");
   anchor.href = url;
-  const prefix = mode === "sample" ? "tabcash-sample" : "tabcash";
-  anchor.download = `${prefix}-${state.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`;
+  anchor.download = `tabcash-${state.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
   showToast("Tab export saved");
@@ -726,145 +664,85 @@ $("#import-file").addEventListener("change", async (event) => {
   const file = event.target.files[0];
   if (!file) return;
   try {
-    if (mode !== "real") throw new Error("Switch to My tab before importing personal data.");
     const value = JSON.parse(await file.text());
     if (!validateImport(value)) throw new Error("The selected file is not a TabCash export.");
-    if (value.workspaceMode === "sample") throw new Error("Sample demo exports cannot be imported into My tab.");
-    const { workspaceMode: _workspaceMode, ...importedState } = value;
-    state = importedState;
+    if (state.events.length && !confirm("Importing replaces the tab currently open in this browser. Export it first if you want to keep it. Continue?")) return;
+    delete value.workspaceMode; // field written by older versions; no longer used
+    state = value;
     save();
     render();
     showToast("Tab imported");
   } catch (error) {
     showToast(error.message || "Could not read that tab");
+  } finally {
+    event.target.value = "";
   }
-  event.target.value = "";
 });
-$("#sample-mode").addEventListener("click", () => switchMode("sample"));
-$("#real-mode").addEventListener("click", () => switchMode("real"));
 
-/* ---------- submission section (honest: blanks stay pending) ---------- */
-function renderSubmission() {
-  const report = validateSubmission(submission);
-  const list = $("#submission-links");
-  list.replaceChildren();
-  for (const check of report.checks) {
-    const item = el("li", `sub-item ${check.valid ? "ok" : "pending"}`);
-    item.append(el("span", "sub-state", check.valid ? "FORMAT OK" : "PENDING"));
-    const isAddress = check.key === "ember2026DonationAddress";
-    if (check.valid && !isAddress) {
-      const a = el("a", "", `${check.label} \u2197`);
-      a.href = check.value;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      item.append(a);
-    } else if (check.valid) {
-      item.append(el("span", "", `${check.label}: `), el("code", "donation-address", check.value));
-    } else {
-      item.append(el("span", "", `${check.label}: ${check.requirement}`));
-    }
-    list.append(item);
-  }
-  const passing = report.checks.filter((c) => c.valid).length;
-  $("#submission-notice").textContent = `${passing}/${report.checks.length} public submission fields pass local format checks. ${report.notice}`;
-}
-
-/* ---------- getting started ---------- */
-function setupGuide() {
-  const guide = $("#getting-started");
-  guide.open = localStorage.getItem(GUIDE_KEY) !== "yes";
-  guide.querySelectorAll("[data-guide-action]").forEach((button) => {
-    button.onclick = () => {
-      switchMode("real");
-      $(button.dataset.guideAction === "first-expense" ? "#add-expense" : "#settle-all").click();
-    };
-  });
-  $("#dismiss-guide").onclick = () => {
-    guide.open = false;
-    localStorage.setItem(GUIDE_KEY, "yes");
-    guide.querySelector("summary").focus();
-  };
-}
-
-/* ---------- motion: scroll reveal + hero parallax ---------- */
-function setupMotion() {
-  const targets = document.querySelectorAll(".reveal:not(.in)");
-  if (reducedMotion.matches || !("IntersectionObserver" in window)) {
-    targets.forEach((node) => node.classList.add("in"));
-  } else {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("in");
-            observer.unobserve(entry.target);
-          }
-        }
-      },
-      { threshold: 0.12, rootMargin: "0px 0px -6% 0px" },
-    );
-    targets.forEach((node) => observer.observe(node));
-  }
-  // Gentle pointer parallax: one CSS-variable write per frame, transform-only consumers.
-  const stage = $(".hero");
-  let frame = 0;
-  stage.addEventListener("pointermove", (event) => {
-    if (reducedMotion.matches || frame) return;
-    frame = requestAnimationFrame(() => {
-      frame = 0;
-      const r = stage.getBoundingClientRect();
-      stage.style.setProperty("--px", ((event.clientX - r.left) / r.width - 0.5).toFixed(3));
-      stage.style.setProperty("--py", ((event.clientY - r.top) / r.height - 0.5).toFixed(3));
-    });
-  });
-  stage.addEventListener("pointerleave", () => {
-    stage.style.setProperty("--px", 0);
-    stage.style.setProperty("--py", 0);
-  });
-}
-
-render();
-renderMode();
-$("#connect-wallet").addEventListener("click", async (event) => {
-  if (walletBound) return;
-  const button = event.currentTarget;
-  button.disabled = true;
+/* ---------- wallet connect + view gating ---------- */
+const connectButton = $("#connect-wallet");
+async function openWallet() {
+  const triggers = document.querySelectorAll("#connect-wallet, [data-connect]");
+  triggers.forEach((b) => b.setAttribute("aria-busy", "true"));
   try {
     await initWallet();
-  } catch (e) {
-    syncConnectButton();
+  } catch {
     showToast("Wallet failed to load. Check your connection and try again.");
     return;
+  } finally {
+    triggers.forEach((b) => b.removeAttribute("aria-busy"));
   }
-  if (mode === "real") $("#wallet-dialog").showModal();
-});
-/* Sample/My tab switcher stays hidden until a wallet connects. wallet.js is untouched; we watch its button label. */
-function setupModeSwitcher() {
-  const button = $("#connect-wallet");
-  const switcher = $(".mode-switch");
-  let connected = false;
-  const sync = () => {
-    const label = button.textContent.trim();
-    // wallet.js labels: "Wallet connected" (connected, My tab), "Connect wallet" (disconnected),
-    // "Wallet \u00b7 My tab only" (Sample open). The last carries no news, so keep the last known state.
-    if (label === "Wallet connected") connected = true;
-    else if (label === "Connect wallet") connected = false;
-    switcher.hidden = !connected;
-    if (!connected && mode !== "real") switchMode("real");
-  };
-  new MutationObserver(sync).observe(button, { childList: true, characterData: true, subtree: true });
-  sync();
+  const dialog = $("#wallet-dialog");
+  if (!dialog.open) dialog.showModal();
 }
-$("#hero-connect").addEventListener("click", () => {
-  switchMode("real");
-  $("#connect-wallet").click();
+// Before wallet.js loads we own the button. Afterwards wallet.js's own onclick opens the dialog.
+connectButton.addEventListener("click", () => {
+  if (!walletBound) openWallet();
 });
-$("#hero-start").addEventListener("click", () => {
-  switchMode("real");
-  $("#app").scrollIntoView({ behavior: reducedMotion.matches ? "auto" : "smooth" });
-  $("#add-expense").click();
+document.querySelectorAll("[data-connect]").forEach((b) => b.addEventListener("click", openWallet));
+
+let view = "landing";
+function setView(connected) {
+  const next = connected ? "app" : "landing";
+  connectButton.dataset.connected = String(connected);
+  if (next === view) return;
+  view = next;
+  document.body.dataset.view = next;
+  $("#landing").hidden = connected;
+  $("#nav-landing").hidden = connected;
+  $("#app").hidden = !connected;
+  $("#nav-app").hidden = !connected;
+  if (connected) {
+    render();
+    if (migratedLegacy) {
+      showToast("Your saved tab from the previous version was preserved.");
+      migratedLegacy = false;
+    }
+  } else {
+    for (const dialog of document.querySelectorAll("dialog:not(#wallet-dialog)")) dialog.close();
+  }
+  window.scrollTo({ top: 0, behavior: "auto" });
+  $("#main").focus({ preventScroll: true });
+}
+// wallet.js sets this label to "Wallet connected" when a wallet is ready and back to
+// "Connect wallet" on disconnect. We only watch it; wallet.js stays untouched.
+const syncView = () => setView(connectButton.textContent.trim() === "Wallet connected");
+new MutationObserver(syncView).observe(connectButton, { childList: true, characterData: true, subtree: true });
+syncView();
+
+/* ---------- motion: gentle hero parallax ---------- */
+const hero = $(".hero");
+let frame = 0;
+hero.addEventListener("pointermove", (event) => {
+  if (reducedMotion.matches || frame) return;
+  frame = requestAnimationFrame(() => {
+    frame = 0;
+    const r = hero.getBoundingClientRect();
+    hero.style.setProperty("--px", ((event.clientX - r.left) / r.width - 0.5).toFixed(3));
+    hero.style.setProperty("--py", ((event.clientY - r.top) / r.height - 0.5).toFixed(3));
+  });
 });
-setupModeSwitcher();
-renderSubmission();
-setupGuide();
-setupMotion();
+hero.addEventListener("pointerleave", () => {
+  hero.style.setProperty("--px", 0);
+  hero.style.setProperty("--py", 0);
+});

@@ -3,246 +3,236 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#070d0b">
-  <meta name="description" content="TabCash is a local-first, non-custodial shared-expense splitter that settles directly in Bitcoin Cash.">
-  <title>TabCash &mdash; shared tabs, settled in BCH</title>
+  <meta name="theme-color" content="#0b1030">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="TabCash is a non-custodial app for splitting group expenses and settling directly in Bitcoin Cash.">
+  <title>TabCash &mdash; split expenses, settle in Bitcoin Cash</title>
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
-  <script>document.documentElement.classList.add("js");</script>
 </head>
-<body>
-  <a class="skip-link" href="#main-content">Skip to content</a>
+<body data-view="landing">
+  <a class="skip-link" href="#main">Skip to content</a>
 
-  <!-- Floating background: decorative, transform/opacity animation only -->
-  <div class="sky" aria-hidden="true">
-    <span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span>
-    <span class="coin c1">&#8383;</span><span class="coin c2">&#8383;</span><span class="coin c3">&#8383;</span>
-    <span class="coin c4">&#8383;</span><span class="coin c5">&#8383;</span><span class="coin c6">&#8383;</span>
-    <span class="coin c7">&#8383;</span><span class="coin c8">&#8383;</span>
-    <span class="spark s1"></span><span class="spark s2"></span><span class="spark s3"></span>
-    <span class="spark s4"></span><span class="spark s5"></span><span class="spark s6"></span>
+  <!-- Cinematic backdrop: decorative, transform/opacity animation only -->
+  <div class="aurora" aria-hidden="true">
+    <span class="blob b-gold"></span><span class="blob b-coral"></span>
+    <span class="blob b-teal"></span><span class="blob b-magic"></span>
+    <span class="lantern l1"></span><span class="lantern l2"></span><span class="lantern l3"></span>
+    <span class="lantern l4"></span><span class="lantern l5"></span>
   </div>
 
-  <header class="nav">
-    <a class="brand" href="#top" aria-label="TabCash home"><span class="brand-mark">&#8383;</span><span>tabcash</span></a>
-    <nav class="nav-links" aria-label="Sections">
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="TabCash home"><span class="brand-mark" aria-hidden="true">&#8383;</span><span>TabCash</span></a>
+    <nav class="topnav" id="nav-landing" aria-label="Sections">
       <a href="#how">How it works</a>
-      <a href="#app">Dashboard</a>
-      <a href="#insights">Insights</a>
-      <a href="#submission">Submission</a>
+      <a href="#trust">Trust</a>
     </nav>
-    <div class="nav-actions">
-      <div class="mode-switch" role="group" aria-label="Choose tab data" hidden>
-        <button type="button" id="sample-mode" aria-pressed="true">Sample demo</button>
-        <button type="button" id="real-mode" aria-pressed="false">My tab</button>
-      </div>
-      <button class="btn btn-primary" id="connect-wallet" type="button">Connect wallet</button>
-    </div>
+    <nav class="topnav" id="nav-app" aria-label="Tab sections" hidden>
+      <a href="#overview">Overview</a>
+      <a href="#activity">Activity</a>
+      <a href="#insights">Insights</a>
+    </nav>
+    <button class="btn btn-primary" id="connect-wallet" type="button">Connect wallet</button>
   </header>
 
-  <main id="main-content">
-    <!-- HERO -->
-    <section class="hero" id="top">
-      <div class="hero-copy">
-        <p class="eyebrow"><span class="dot"></span> Shared expenses on Bitcoin Cash &middot; non-custodial</p>
-        <h1>Split the bill.<br><span class="grad">Settle in Bitcoin Cash.</span></h1>
-        <p class="lead">Track shared expenses with friends, see exactly who owes whom, and pay each other directly from your own BCH wallets. No account. No custody. No middleman.</p>
-        <div class="hero-cta">
-          <button class="btn btn-primary btn-lg" id="hero-connect" type="button">Connect wallet</button>
-          <button class="btn btn-ghost btn-lg" id="hero-start" type="button">Add your first expense</button>
-        </div>
-        <ul class="hero-points">
-          <li>Integer-satoshi math</li><li>Compact paybacks</li><li>Wallet-to-wallet payments</li>
-        </ul>
-      </div>
-      <div class="hero-stage" aria-label="Live preview of the open tab">
-        <div class="float-card fc-main">
-          <div class="fc-label"><span id="hero-mode-label">MY TAB</span> &middot; <span id="hero-title">My BCH tab</span></div>
-          <div class="fc-value"><span id="hero-total">0.00000000</span> <small>BCH</small></div>
-          <div class="fc-sub" id="hero-sub">0 expenses</div>
-          <div class="fc-avatars" id="hero-avatars"></div>
-        </div>
-        <div class="float-card fc-plan">
-          <div class="fc-label">COMPACT PAYBACKS</div>
-          <div class="fc-big"><span id="hero-transfers">0</span> <small>transfers</small></div>
-          <div class="fc-sub" id="hero-naive"></div>
-        </div>
-        <div class="float-card fc-safe">
-          <span class="shield" aria-hidden="true">&#9670;</span>
-          <div><b>Non-custodial</b><span>TabCash never holds funds</span></div>
-        </div>
-      </div>
-    </section>
+  <main id="main" tabindex="-1">
 
-    <!-- HOW IT WORKS -->
-    <section class="section" id="how" aria-labelledby="how-h">
-      <div class="section-head reveal">
-        <p class="kicker">HOW IT WORKS</p>
-        <h2 id="how-h">From a pile of receipts to one wallet tap.</h2>
-        <p class="section-lead">Everything is computed on your device from integer satoshis. The only time money moves is when you approve a transaction in your own wallet.</p>
-      </div>
-      <ol class="steps">
-        <li class="step reveal"><span class="step-n">1</span><h3>Log what was spent</h3><p>Add each expense, who paid and who shared it. Costs split evenly in satoshis: everyone gets the floor share and the leftover satoshis go to the first people in the list, so nothing is lost to rounding.</p></li>
-        <li class="step reveal"><span class="step-n">2</span><h3>Net it all out</h3><p>TabCash totals what each person paid against what they owe. Positive means the group owes you; negative means you owe the group.</p></li>
-        <li class="step reveal"><span class="step-n">3</span><h3>Shrink the paybacks</h3><p>The settlement planner matches debtors to creditors so a short list of transfers clears the whole tab, instead of everyone paying everyone.</p></li>
-        <li class="step reveal"><span class="step-n">4</span><h3>Pay in BCH, directly</h3><p>Connect a WizardConnect wallet and approve each payment yourself. Funds go wallet-to-wallet. You then check the transaction and record the settlement.</p></li>
-      </ol>
-      <div class="trust reveal">
-        <div><b>Local-first</b><span>Tabs live in this browser's storage. Export JSON any time.</span></div>
-        <div><b>Non-custodial</b><span>No keys are collected. Your wallet signs; TabCash never holds funds.</span></div>
-        <div><b>Guard-railed</b><span>Mainnet consent gate, 0.01 BCH per-payment demo limit, 1,000-sat fee.</span></div>
-      </div>
-    </section>
-
-    <!-- DASHBOARD -->
-    <section class="section" id="app" aria-labelledby="app-h">
-      <div class="section-head reveal">
-        <p class="kicker">DASHBOARD</p>
-        <div class="title-row">
-          <h2 id="app-h"><span id="group-title">My BCH tab</span></h2>
-          <button class="btn btn-ghost btn-sm" id="edit-name" type="button">Rename tab</button>
+    <!-- ============ LANDING (wallet not connected) ============ -->
+    <div id="landing">
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="dot" aria-hidden="true"></span>Non-custodial &middot; Bitcoin Cash mainnet</p>
+          <h1>Split the bill.<br><span class="grad">Settle in Bitcoin&nbsp;Cash.</span></h1>
+          <p class="lead">Keep one shared tab with your group, see exactly who owes whom, and pay each other wallet to wallet. No account, no custody, no middleman.</p>
+          <div class="hero-cta">
+            <button class="btn btn-primary btn-lg" type="button" data-connect>Connect wallet</button>
+            <a class="btn btn-glass btn-lg" href="#how">See how it works</a>
+          </div>
+          <ul class="chips" aria-label="Highlights">
+            <li>Exact satoshi math</li><li>Fewest paybacks</li><li>You sign every payment</li>
+          </ul>
         </div>
-        <p class="section-lead">Keep the math together. Pay each other in Bitcoin Cash.</p>
-      </div>
+        <div class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 420 380" class="art-svg" focusable="false">
+            <defs>
+              <linearGradient id="rib1" x1="0" x2="1"><stop offset="0" stop-color="#ffc766"/><stop offset="1" stop-color="#ff8a6b"/></linearGradient>
+              <linearGradient id="rib2" x1="0" x2="1"><stop offset="0" stop-color="#ff8a6b"/><stop offset="1" stop-color="#b8a1ff"/></linearGradient>
+              <radialGradient id="orb" cx=".35" cy=".3"><stop offset="0" stop-color="#fff2d6"/><stop offset=".45" stop-color="#ffc766"/><stop offset="1" stop-color="#e0703f"/></radialGradient>
+              <radialGradient id="orb2" cx=".35" cy=".3"><stop offset="0" stop-color="#d9fff1"/><stop offset=".45" stop-color="#3be0a8"/><stop offset="1" stop-color="#0f7d78"/></radialGradient>
+              <radialGradient id="orb3" cx=".35" cy=".3"><stop offset="0" stop-color="#f1eaff"/><stop offset=".45" stop-color="#b8a1ff"/><stop offset="1" stop-color="#5b46b8"/></radialGradient>
+            </defs>
+            <path class="rib r1" d="M92 96 C190 96 190 190 328 190" fill="none" stroke="url(#rib1)" stroke-width="16" stroke-linecap="round"/>
+            <path class="rib r2" d="M92 290 C190 290 190 190 328 190" fill="none" stroke="url(#rib2)" stroke-width="9" stroke-linecap="round"/>
+            <circle class="orb o1" cx="92" cy="96" r="46" fill="url(#orb)"/>
+            <circle class="orb o2" cx="92" cy="290" r="38" fill="url(#orb3)"/>
+            <circle class="orb o3" cx="328" cy="190" r="62" fill="url(#orb2)"/>
+            <text x="328" y="203" text-anchor="middle" class="art-mark">&#8383;</text>
+          </svg>
+        </div>
+      </section>
 
-      <div class="mode-notice reveal" id="mode-notice" role="status" aria-live="polite"></div>
-      <details class="guide reveal" id="getting-started">
-        <summary>Start here &middot; a two-minute TabCash walkthrough</summary>
-        <p>TabCash opens in My tab: an empty workspace that stays in this browser and uses real BCH mainnet. Once a wallet is connected you can also open a separate Sample demo, which never sends BCH.</p>
-        <ol>
-          <li>Add your group and record your first shared expense. <button class="btn btn-ghost btn-sm" type="button" data-guide-action="first-expense">Add your first expense</button></li>
-          <li>Connect a wallet to unlock payments. After connecting you can switch between My tab and the Sample demo; they keep separate data.</li>
-          <li>In My tab, add each recipient's real BCH address and review the settlement plan. <button class="btn btn-ghost btn-sm" type="button" data-guide-action="real-plan">Open My tab settlement plan</button></li>
-          <li>Wallet payments are real BCH mainnet transactions. Confirm the recipient, amount, fee and change in your wallet; verify the transaction before recording a settlement.</li>
+      <section class="section" id="how" aria-labelledby="how-h">
+        <div class="section-head">
+          <p class="kicker">How it works</p>
+          <h2 id="how-h">From a pile of receipts to one wallet tap.</h2>
+          <p class="section-lead">Everything is computed on your device in whole satoshis. Money moves only when you approve a transaction in your own wallet.</p>
+        </div>
+        <ol class="steps">
+          <li class="glass step"><span class="step-n">1</span><h3>Connect your wallet</h3><p>Pair a WizardConnect HD wallet on BCH mainnet. TabCash never sees a private key.</p></li>
+          <li class="glass step"><span class="step-n">2</span><h3>Log what was spent</h3><p>Add people and expenses. Each cost splits evenly in satoshis, with leftover satoshis assigned in order, so nothing is lost to rounding.</p></li>
+          <li class="glass step"><span class="step-n">3</span><h3>Net it all out</h3><p>Totals what each person paid against what they owe. A plus sign means the group owes you; a minus sign means you owe the group.</p></li>
+          <li class="glass step"><span class="step-n">4</span><h3>Pay in BCH, directly</h3><p>A short list of paybacks clears the tab. You approve each payment in your wallet, then record the settlement.</p></li>
         </ol>
-        <button class="btn btn-ghost btn-sm" id="dismiss-guide" type="button">Keep this guide collapsed</button>
-      </details>
+      </section>
 
-      <div class="summary-grid">
-        <article class="card stat reveal"><div class="stat-label">TOTAL SPENT</div><div class="stat-value"><span id="total-spent">0.00000000</span> <small>BCH</small></div><div class="stat-foot" id="expense-count">No expenses yet</div></article>
-        <article class="card stat reveal"><div class="stat-label">YOU ARE OWED</div><div class="stat-value pos"><span id="owed-to-you">0.00000000</span> <small>BCH</small></div><div class="stat-foot" id="owed-note">Nothing owed yet</div></article>
-        <article class="card stat reveal"><div class="stat-label">YOU OWE</div><div class="stat-value neg"><span id="you-owe">0.00000000</span> <small>BCH</small></div><div class="stat-foot"><span class="pill" id="settlement-status">ALL CLEAR</span></div></article>
-      </div>
+      <section class="section" id="trust" aria-labelledby="trust-h">
+        <div class="section-head">
+          <p class="kicker">Trust</p>
+          <h2 id="trust-h">Your keys, your coins, your device.</h2>
+          <p class="section-lead">Payments are real BCH mainnet transactions, confirmed in your wallet. TabCash is only the ledger and the messenger.</p>
+        </div>
+        <div class="trust-grid">
+          <article class="glass trust-card"><h3>Non-custodial</h3><p>No keys are collected and no funds are held. Your wallet signs; TabCash cannot spend.</p></article>
+          <article class="glass trust-card"><h3>Local-first</h3><p>Your tab lives in this browser&rsquo;s storage. Export it as JSON whenever you like.</p></article>
+          <article class="glass trust-card"><h3>Guard-railed</h3><p>A mainnet consent check, payments between 546 and 1,000,000 satoshis (0.01 BCH), and a fixed 1,000 satoshi fee.</p></article>
+        </div>
+        <div class="glass cta-band">
+          <div><h2>Ready to settle up?</h2><p>Connect a wallet to open your tab. It starts empty and stays yours.</p></div>
+          <button class="btn btn-primary btn-lg" type="button" data-connect>Connect wallet</button>
+        </div>
+      </section>
+    </div>
 
-      <div class="dash-grid">
-        <div class="card panel reveal" id="activity">
+    <!-- ============ APP (wallet connected) ============ -->
+    <div id="app" hidden>
+      <section class="page-head" id="overview" aria-labelledby="group-title">
+        <div>
+          <p class="kicker">Your tab</p>
+          <div class="title-row">
+            <h1 id="group-title" class="app-title">My BCH tab</h1>
+            <button class="btn btn-glass btn-sm" id="edit-name" type="button">Rename</button>
+          </div>
+        </div>
+        <div class="head-actions">
+          <button class="btn btn-primary" id="add-expense" type="button">+ Add expense</button>
+          <button class="btn btn-glass" id="add-person" type="button">+ Add person</button>
+          <button class="btn btn-glass" id="settle-all" type="button">Settlement plan</button>
+        </div>
+      </section>
+
+      <section class="summary" aria-label="Tab summary">
+        <article class="glass stat"><h2 class="stat-label">Total spent</h2><p class="stat-value"><span id="total-spent">0.00000000</span> <small>BCH</small></p><p class="stat-foot" id="expense-count">No expenses yet</p></article>
+        <article class="glass stat"><h2 class="stat-label">You are owed</h2><p class="stat-value pos"><span class="sign" aria-hidden="true">&#9650;</span> <span id="owed-to-you">0.00000000</span> <small>BCH</small></p><p class="stat-foot" id="owed-note">Nothing owed to you</p></article>
+        <article class="glass stat"><h2 class="stat-label">You owe</h2><p class="stat-value neg"><span class="sign" aria-hidden="true">&#9660;</span> <span id="you-owe">0.00000000</span> <small>BCH</small></p><p class="stat-foot"><span class="pill" id="settlement-status" data-tone="even">All clear</span></p></article>
+      </section>
+
+      <section class="board">
+        <div class="glass panel" id="activity" aria-labelledby="activity-h">
           <div class="panel-head">
-            <div><h3>Recent activity</h3><p>Every cost, shared clearly.</p></div>
-            <button class="btn btn-primary" id="add-expense" type="button">+ Add an expense</button>
+            <div><h2 id="activity-h">Activity</h2><p>Every cost and settlement, newest first.</p></div>
           </div>
           <div class="filters" role="group" aria-label="Filter activity">
-            <button class="filter active" type="button" data-filter="all">All activity</button>
-            <button class="filter" type="button" data-filter="expense">Expenses <span id="expense-filter-count">0</span></button>
-            <button class="filter" type="button" data-filter="settlement">Settlements</button>
+            <button class="filter active" type="button" data-filter="all" aria-pressed="true">All</button>
+            <button class="filter" type="button" data-filter="expense" aria-pressed="false">Expenses <span id="expense-filter-count">0</span></button>
+            <button class="filter" type="button" data-filter="settlement" aria-pressed="false">Settlements</button>
           </div>
           <div id="activity-list" class="activity-list"></div>
         </div>
 
         <div class="side-col">
-          <div class="card panel reveal" id="people">
-            <div class="panel-head">
-              <div><h3>People</h3><p><span id="people-count">0</span> in this tab</p></div>
-              <button class="btn btn-ghost btn-sm" id="add-person" type="button">+ Add person</button>
-            </div>
+          <div class="glass panel" id="people" aria-labelledby="people-h">
+            <div class="panel-head"><div><h2 id="people-h">People</h2><p><span id="people-count">1</span> in this tab</p></div></div>
             <div id="people-list" class="people-list"></div>
           </div>
-
-          <div class="card panel settle reveal" id="settle">
-            <div class="panel-head"><div><p class="kicker">CLEAN SLATE</p><h3>Settle up</h3></div></div>
-            <p class="muted">A few transfers can clear the whole tab. No spreadsheets, no awkward reminders.</p>
+          <div class="glass panel" id="settle" aria-labelledby="settle-h">
+            <div class="panel-head"><div><h2 id="settle-h">Settle up</h2><p>A few transfers clear the whole tab.</p></div></div>
             <div id="settlement-list" class="settlement-list"></div>
-            <button class="btn btn-primary btn-block" id="settle-all" type="button">Review settlement plan</button>
-            <p class="fineprint">Payments happen directly between wallets. TabCash never holds funds.</p>
-          </div>
-
-          <div class="card panel reveal tools">
-            <h3>Back up &amp; share</h3>
-            <p class="muted">Tabs stay on this device. Export a copy to back one up or share it.</p>
-            <div class="tool-row">
-              <button class="btn btn-ghost btn-sm" id="export-button" type="button">Export this tab</button>
-              <button class="btn btn-ghost btn-sm" id="import-button" type="button">Import a tab</button>
-              <input hidden id="import-file" type="file" accept="application/json">
-            </div>
+            <p class="fineprint">Payments go directly between wallets. TabCash never holds funds.</p>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- INSIGHTS -->
-    <section class="section" id="insights" aria-labelledby="ins-h">
-      <div class="section-head reveal">
-        <p class="kicker">INSIGHTS</p>
-        <h2 id="ins-h">See where the money went, and who pays whom.</h2>
-        <p class="section-lead">Derived live from this tab's events. Nothing here is stored separately, and every figure is exact to the satoshi.</p>
-      </div>
-      <div class="insight-grid" id="insight-stats"></div>
-      <div class="insight-split">
-        <div class="card panel reveal">
-          <div class="panel-head"><div><h3>Who is ahead, who is behind</h3><p>Net balance per person, scaled to the largest balance.</p></div></div>
-          <div id="balance-bars" class="bars"></div>
+      <section class="section tight" id="insights" aria-labelledby="ins-h">
+        <div class="section-head">
+          <p class="kicker">Insights</p>
+          <h2 id="ins-h">Where the money went, and who pays whom.</h2>
         </div>
-        <div class="card panel reveal">
-          <div class="panel-head"><div><h3>Settlement flow</h3><p>Each ribbon is one transfer; thickness is its amount.</p></div></div>
-          <div id="flow" class="flow"></div>
+        <div id="insights-empty" class="glass panel" hidden></div>
+        <div id="insights-body">
+          <div class="insight-grid" id="insight-stats"></div>
+          <div class="insight-split">
+            <div class="glass panel"><div class="panel-head"><div><h3>Who is ahead, who is behind</h3><p>Net balance per person, scaled to the largest.</p></div></div><div id="balance-bars" class="bars"></div></div>
+            <div class="glass panel"><div class="panel-head"><div><h3>Settlement flow</h3><p>Each ribbon is one transfer; thickness is its amount.</p></div></div><div id="flow" class="flow"></div></div>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- SUBMISSION -->
-    <section class="section" id="submission" aria-labelledby="sub-h">
-      <div class="section-head reveal">
-        <p class="kicker">FOR JUDGES</p>
-        <h2 id="sub-h">BCH BLAZE 2026 &middot; mainnet entry in preparation</h2>
-        <p class="section-lead">Shared tabs &rarr; fewer paybacks &rarr; direct BCH payments. My tab and the Sample demo (available after connecting a wallet) are separate. The sample never sends or records BCH; My tab supports real wallet actions after you review them.</p>
-      </div>
-      <div class="card panel reveal sub-card">
-        <ul id="submission-links" class="sub-list"></ul>
-        <p class="muted" id="submission-notice"></p>
-        <details class="before-submit">
-          <summary>Before submission</summary>
-          <p>The source repository is public. A hosted demo URL is not configured yet. Publish the prepared Widget Factory deck and paste its public link into submission.js. Add your CashTokens-enabled EMBER2026 donation address there. Record a wallet-approved mainnet transaction and check roll-call, Telegram and DoraHacks entry status. These steps remain pending until you provide the real details and evidence.</p>
-        </details>
-        <a class="btn btn-ghost" href="./judge-guide.html" target="_blank" rel="noopener noreferrer">Judge walkthrough and hosting checklist &#8599;</a>
-      </div>
-    </section>
+      <section class="glass panel backup" aria-labelledby="backup-h">
+        <div><h2 id="backup-h">Back up &amp; move your tab</h2><p>Your tab stays on this device. Export a JSON copy to back it up or open it elsewhere.</p></div>
+        <div class="tool-row">
+          <button class="btn btn-glass btn-sm" id="export-button" type="button">Export tab</button>
+          <button class="btn btn-glass btn-sm" id="import-button" type="button">Import tab</button>
+          <input hidden id="import-file" type="file" accept="application/json">
+        </div>
+      </section>
+      <p class="fineprint center">Payments are real BCH mainnet transactions, confirmed in your wallet. Your tab is saved only in this browser.</p>
+    </div>
   </main>
 
   <footer class="footer">
-    <span>TabCash</span><span>Built for the BCH BLAZE 2026 hackathon</span><span>Local-first &middot; Non-custodial</span>
+    <span>TabCash</span><span>Non-custodial &middot; Local-first</span><span>Bitcoin Cash mainnet</span>
   </footer>
 
-  <dialog id="expense-dialog" class="modal">
+  <dialog id="expense-dialog" class="modal" aria-labelledby="expense-h">
     <form id="expense-form" method="dialog">
-      <div class="modal-head"><div><p class="kicker">ADD TO THE TAB</p><h2>New expense</h2></div><button class="close-button" type="button" aria-label="Close dialog" data-close="expense-dialog">&times;</button></div>
-      <label>Description<input name="description" required maxlength="70" placeholder="Dinner at Lazarus Brewing"></label>
+      <div class="modal-head"><div><p class="kicker">Add to the tab</p><h2 id="expense-h">New expense</h2></div><button class="close-button" type="button" aria-label="Close dialog" data-close="expense-dialog">&times;</button></div>
+      <label>Description<input name="description" required maxlength="70" placeholder="Dinner, taxi, groceries&hellip;"></label>
       <div class="form-row">
-        <label>Amount in BCH<span class="amount-input"><input name="amount" required inputmode="decimal" type="number" min="0.00000001" max="21000000" step="0.00000001" placeholder="0.01500000"><span>BCH</span></span></label>
+        <label>Amount in BCH<span class="amount-input"><input name="amount" required inputmode="decimal" type="number" min="0.00000001" max="21000000" step="0.00000001" placeholder="0.01500000"><span aria-hidden="true">BCH</span></span></label>
         <label>Paid by<select name="payer" id="payer-select"></select></label>
       </div>
       <fieldset><legend>Split between <span class="hint">Choose who shared this cost</span></legend><div id="split-picker" class="split-picker"></div></fieldset>
-      <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close="expense-dialog">Cancel</button><button class="btn btn-primary" type="submit">Add expense</button></div>
+      <div class="modal-actions"><button type="button" class="btn btn-glass" data-close="expense-dialog">Cancel</button><button class="btn btn-primary" type="submit">Add expense</button></div>
     </form>
   </dialog>
 
-  <dialog id="person-dialog" class="modal">
+  <dialog id="person-dialog" class="modal" aria-labelledby="person-h">
     <form id="person-form" method="dialog">
-      <div class="modal-head"><div><p class="kicker">ADD TO THE GROUP</p><h2>Invite someone</h2></div><button class="close-button" type="button" aria-label="Close dialog" data-close="person-dialog">&times;</button></div>
+      <div class="modal-head"><div><p class="kicker">Add to the group</p><h2 id="person-h">Add a person</h2><p class="modal-desc" id="person-desc"></p></div><button class="close-button" type="button" aria-label="Close dialog" data-close="person-dialog">&times;</button></div>
       <label>Name<input name="name" required maxlength="32" placeholder="Alex Morgan"></label>
-      <label>Bitcoin Cash address <span class="hint">Optional &middot; lets others create a payment request</span><input name="address" maxlength="120" placeholder="bitcoincash:q&hellip;"></label>
-      <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close="person-dialog">Cancel</button><button class="btn btn-primary" type="submit">Add person</button></div>
+      <label>Bitcoin Cash address <span class="hint">Optional &middot; needed to pay or request payment</span><input name="address" maxlength="120" placeholder="bitcoincash:q&hellip;" autocomplete="off" spellcheck="false"></label>
+      <div class="modal-actions"><button type="button" class="btn btn-glass" data-close="person-dialog">Cancel</button><button class="btn btn-primary" type="submit">Add person</button></div>
     </form>
   </dialog>
 
-  <dialog id="plan-dialog" class="modal plan-modal">
-    <div class="modal-head"><div><p class="kicker">ONE LAST PASS</p><h2>Settlement plan</h2><p class="modal-desc">Review the suggested payments. TabCash never sends funds for you.</p></div><button class="close-button" type="button" aria-label="Close dialog" data-close="plan-dialog">&times;</button></div>
+  <dialog id="field-dialog" class="modal" aria-labelledby="field-h">
+    <form id="field-form" method="dialog">
+      <div class="modal-head"><div><h2 id="field-h">Edit</h2></div><button class="close-button" type="button" aria-label="Close dialog" data-close="field-dialog">&times;</button></div>
+      <label><span id="field-label">Value</span><input name="value" id="field-input" maxlength="120" autocomplete="off" spellcheck="false"></label>
+      <p class="field-error" id="field-error" role="alert" hidden></p>
+      <div class="modal-actions"><button type="button" class="btn btn-glass" data-close="field-dialog">Cancel</button><button class="btn btn-primary" type="submit">Save</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="plan-dialog" class="modal plan-modal" aria-labelledby="plan-h">
+    <div class="modal-head"><div><p class="kicker">One last pass</p><h2 id="plan-h">Settlement plan</h2><p class="modal-desc">Pay through your connected wallet, or record a payment you confirmed yourself. A broadcast stays pending until it is mined; balances change only when you record a payment.</p></div><button class="close-button" type="button" aria-label="Close dialog" data-close="plan-dialog">&times;</button></div>
     <div id="plan-detail" class="plan-detail"></div>
-    <div class="modal-actions"><button class="btn btn-ghost" type="button" data-close="plan-dialog">Close</button><button class="btn btn-primary" type="button" id="copy-plan"><span id="copy-plan-label">Copy plan</span></button></div>
+    <div class="modal-actions"><button class="btn btn-glass" type="button" data-close="plan-dialog">Close</button><button class="btn btn-primary" type="button" id="copy-plan">Copy plan</button></div>
+  </dialog>
+
+  <dialog id="wallet-dialog" class="modal" aria-labelledby="wallet-h">
+    <div class="modal-head"><div><p class="kicker">WizardConnect</p><h2 id="wallet-h">Your wallet stays yours.</h2></div><button class="close-button" type="button" aria-label="Close dialog" data-close="wallet-dialog">&times;</button></div>
+    <p class="modal-desc">Use a compatible HD wallet and select BCH mainnet in it. Start pairing here, then scan the QR code or paste the pairing URI into your wallet&rsquo;s WizardConnect screen.</p>
+    <button id="start-pairing" class="btn btn-glass" type="button">Start new pairing</button>
+    <img id="wallet-qr" class="qr" hidden alt="WizardConnect pairing QR code" width="240" height="240">
+    <label>Pairing URI<input readonly id="pairing-uri" aria-label="WizardConnect pairing URI"></label>
+    <p id="wallet-status" role="status" class="wallet-status">Disconnected. No signing keys are collected.</p>
+    <p class="modal-desc">Change is reserved by this app within the first 20 change addresses after a server history check. Reservations persist even after cancellation or an unknown outcome. A secure browser with Web Locks and local storage is required.</p>
+    <label class="consent"><input type="checkbox" id="mainnet-consent"> I understand this sends real BCH on mainnet. I will check recipient, amount and the 1,000 sat fee in my wallet. Live demo limit: 0.01 BCH per payment.</label>
+    <div class="modal-actions"><button id="cancel-signing" class="btn btn-glass" type="button">Cancel signing</button><button id="disconnect-wallet" class="btn btn-glass" type="button">Disconnect</button></div>
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-  <dialog id="wallet-dialog" class="modal"><div class="modal-head"><div><p class="kicker">WIZARDCONNECT</p><h2>Your wallet stays yours.</h2></div><button class="close-button" type="button" aria-label="Close dialog" data-close="wallet-dialog">&times;</button></div><p class="modal-desc">Use a compatible HD wallet. Select BCH mainnet in your wallet. Start pairing here, then scan the QR or paste the pairing URI into your wallet's WizardConnect screen.</p><button id="start-pairing" class="btn btn-ghost" type="button">Start new pairing</button><img id="wallet-qr" hidden alt="WizardConnect pairing QR" width="240" height="240"><label>Pairing URI<input readonly id="pairing-uri" aria-label="WizardConnect pairing URI"></label><p id="wallet-status" role="status" class="wallet-status">Disconnected. No signing keys are collected.</p><p class="modal-desc">Change is reserved by this app within the first 20 change addresses after a server history check. Reservations persist even after cancellation or an unknown outcome. A secure browser with Web Locks and local storage is required.</p><label class="consent"><input type="checkbox" id="mainnet-consent"> I understand this sends real BCH on mainnet. I will check recipient, amount and the 1,000 sat fee in my wallet. Live demo limit: 0.01 BCH per payment.</label><div class="modal-actions"><button id="cancel-signing" class="btn btn-ghost" type="button">Cancel signing</button><button id="disconnect-wallet" class="btn btn-ghost" type="button">Disconnect</button></div></dialog>
-
   <script type="module" src="./app.js"></script>
 </body>
 </html>

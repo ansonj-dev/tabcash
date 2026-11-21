@@ -32,7 +32,7 @@
       <a href="#submission">Submission</a>
     </nav>
     <div class="nav-actions">
-      <div class="mode-switch" role="group" aria-label="Choose tab data">
+      <div class="mode-switch" role="group" aria-label="Choose tab data" hidden>
         <button type="button" id="sample-mode" aria-pressed="true">Sample demo</button>
         <button type="button" id="real-mode" aria-pressed="false">My tab</button>
       </div>
@@ -44,20 +44,20 @@
     <!-- HERO -->
     <section class="hero" id="top">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="dot"></span> BCH BLAZE 2026 &middot; local-first &middot; non-custodial</p>
-        <h1>Split the tab.<br><span class="grad">Settle in real Bitcoin Cash.</span></h1>
-        <p class="lead">TabCash keeps the shared-expense math in your browser, nets a messy tangle of debts into a compact set of paybacks, and lets friends pay each other directly from their own wallets. No account. No custody. No middleman.</p>
+        <p class="eyebrow"><span class="dot"></span> Shared expenses on Bitcoin Cash &middot; non-custodial</p>
+        <h1>Split the bill.<br><span class="grad">Settle in Bitcoin Cash.</span></h1>
+        <p class="lead">Track shared expenses with friends, see exactly who owes whom, and pay each other directly from your own BCH wallets. No account. No custody. No middleman.</p>
         <div class="hero-cta">
-          <a class="btn btn-primary btn-lg" href="#app">Open the dashboard</a>
-          <a class="btn btn-ghost btn-lg" href="#how">See how it works</a>
+          <button class="btn btn-primary btn-lg" id="hero-connect" type="button">Connect wallet</button>
+          <button class="btn btn-ghost btn-lg" id="hero-start" type="button">Add your first expense</button>
         </div>
         <ul class="hero-points">
-          <li>Integer-satoshi math</li><li>Compact paybacks</li><li>Sample never sends BCH</li>
+          <li>Integer-satoshi math</li><li>Compact paybacks</li><li>Wallet-to-wallet payments</li>
         </ul>
       </div>
       <div class="hero-stage" aria-label="Live preview of the open tab">
         <div class="float-card fc-main">
-          <div class="fc-label"><span id="hero-mode-label">SAMPLE DEMO</span> &middot; <span id="hero-title">Weekend in Austin</span></div>
+          <div class="fc-label"><span id="hero-mode-label">MY TAB</span> &middot; <span id="hero-title">My BCH tab</span></div>
           <div class="fc-value"><span id="hero-total">0.00000000</span> <small>BCH</small></div>
           <div class="fc-sub" id="hero-sub">0 expenses</div>
           <div class="fc-avatars" id="hero-avatars"></div>
@@ -99,7 +99,7 @@
       <div class="section-head reveal">
         <p class="kicker">DASHBOARD</p>
         <div class="title-row">
-          <h2 id="app-h"><span id="group-title">Weekend in Austin</span></h2>
+          <h2 id="app-h"><span id="group-title">My BCH tab</span></h2>
           <button class="btn btn-ghost btn-sm" id="edit-name" type="button">Rename tab</button>
         </div>
         <p class="section-lead">Keep the math together. Pay each other in Bitcoin Cash.</p>
@@ -108,10 +108,10 @@
       <div class="mode-notice reveal" id="mode-notice" role="status" aria-live="polite"></div>
       <details class="guide reveal" id="getting-started">
         <summary>Start here &middot; a two-minute TabCash walkthrough</summary>
-        <p>TabCash has two separate workspaces. Sample demo has fictional Austin expenses and never sends BCH. My tab starts empty and stays in this browser.</p>
+        <p>TabCash opens in My tab: an empty workspace that stays in this browser and uses real BCH mainnet. Once a wallet is connected you can also open a separate Sample demo, which never sends BCH.</p>
         <ol>
-          <li>Use Sample demo to explore example balances and satoshi splitting. <button class="btn btn-ghost btn-sm" type="button" data-guide-action="sample-expense">Add a sample expense</button></li>
-          <li>Switch to My tab, add your group and record actual shared expenses. The two tabs keep separate data.</li>
+          <li>Add your group and record your first shared expense. <button class="btn btn-ghost btn-sm" type="button" data-guide-action="first-expense">Add your first expense</button></li>
+          <li>Connect a wallet to unlock payments. After connecting you can switch between My tab and the Sample demo; they keep separate data.</li>
           <li>In My tab, add each recipient's real BCH address and review the settlement plan. <button class="btn btn-ghost btn-sm" type="button" data-guide-action="real-plan">Open My tab settlement plan</button></li>
           <li>Wallet payments are real BCH mainnet transactions. Confirm the recipient, amount, fee and change in your wallet; verify the transaction before recording a settlement.</li>
         </ol>
@@ -193,7 +193,7 @@
       <div class="section-head reveal">
         <p class="kicker">FOR JUDGES</p>
         <h2 id="sub-h">BCH BLAZE 2026 &middot; mainnet entry in preparation</h2>
-        <p class="section-lead">Shared tabs &rarr; fewer paybacks &rarr; direct BCH payments. Sample demo and My tab are separate. The sample never sends or records BCH; My tab supports real wallet actions after you review them.</p>
+        <p class="section-lead">Shared tabs &rarr; fewer paybacks &rarr; direct BCH payments. My tab and the Sample demo (available after connecting a wallet) are separate. The sample never sends or records BCH; My tab supports real wallet actions after you review them.</p>
       </div>
       <div class="card panel reveal sub-card">
         <ul id="submission-links" class="sub-list"></ul>

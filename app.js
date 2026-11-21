@@ -18,7 +18,6 @@ import { submission } from "./submission.js";
 const LEGACY_STORAGE_KEY = "tabcash:v1";
 const SAMPLE_STORAGE_KEY = "tabcash:v2:sample";
 const REAL_STORAGE_KEY = "tabcash:v2:real";
-const MODE_STORAGE_KEY = "tabcash:v2:mode";
 const GUIDE_KEY = "tabcash:guide-dismissed";
 const NS = "http://www.w3.org/2000/svg";
 
@@ -65,7 +64,6 @@ function initialMode() {
         const value = JSON.parse(legacy);
         if (validateImport(value)) {
           localStorage.setItem(REAL_STORAGE_KEY, JSON.stringify(value));
-          localStorage.setItem(MODE_STORAGE_KEY, "real");
           localStorage.removeItem(LEGACY_STORAGE_KEY);
           migratedLegacyData = true;
           return "real";
@@ -75,7 +73,8 @@ function initialMode() {
       }
     }
   }
-  return localStorage.getItem(MODE_STORAGE_KEY) === "real" ? "real" : "sample";
+  // Every page load lands in My tab; the stored mode no longer picks the initial workspace.
+  return "real";
 }
 function loadState(workspaceMode) {
   try {
@@ -269,12 +268,18 @@ function renderActivity() {
     root.append(
       emptyState(
         settlements ? "\u2197" : "+",
-        settlements ? "No settlements recorded" : "The first round is on you",
+        settlements ? "No settlements recorded" : mode === "real" ? "Add your first shared expense" : "No expenses yet",
         settlements
           ? "Settlements you mark complete will show up here."
-          : "Add an expense and TabCash will split it evenly for your group.",
+          : "Add your first shared expense and TabCash will split it in exact satoshis.",
       ),
     );
+    if (currentFilter !== "settlement" && mode === "real") {
+      const cta = el("button", "btn btn-primary", "+ Add your first shared expense");
+      cta.type = "button";
+      cta.onclick = () => $("#add-expense").click();
+      root.firstChild.append(cta);
+    }
     return;
   }
   const groups = new Map();
@@ -453,12 +458,12 @@ function renderMode() {
       "span",
       "mode-description",
       isSample
-        ? "Fictional Austin expenses. Editing stays in this sample; wallet payments and settlement records are disabled."
-        : "Your tab is saved only in this browser. Wallet payments send real BCH on mainnet after your confirmation.",
+        ? "Sample demo never sends BCH. Fictional Austin expenses; editing stays in this sample, and wallet payments and settlement records are disabled."
+        : "My tab uses real BCH mainnet. Your tab is saved only in this browser, and wallet payments send real BCH after you confirm them in your wallet.",
     ),
   );
   if (migratedLegacyData && !isSample) {
-    notice.append(el("span", "migration-note", "Your saved tab from the previous version was preserved here. The sample demo is separate."));
+    notice.append(el("span", "migration-note", "Your saved tab from the previous version was preserved here."));
   }
   $("#copy-plan-label").textContent = isSample ? "Copy sample plan" : "Copy plan";
   $("#export-button").textContent = isSample ? "Export sample data" : "Export this tab";
@@ -482,7 +487,6 @@ function syncConnectButton() {
 function switchMode(nextMode) {
   if (nextMode === mode) return;
   mode = nextMode === "real" ? "real" : "sample";
-  localStorage.setItem(MODE_STORAGE_KEY, mode);
   state = loadState(mode);
   currentFilter = "all";
   document.querySelectorAll(".filter").forEach((button) => button.classList.toggle("active", button.dataset.filter === "all"));
@@ -771,9 +775,8 @@ function setupGuide() {
   guide.open = localStorage.getItem(GUIDE_KEY) !== "yes";
   guide.querySelectorAll("[data-guide-action]").forEach((button) => {
     button.onclick = () => {
-      const sample = button.dataset.guideAction === "sample-expense";
-      switchMode(sample ? "sample" : "real");
-      $(sample ? "#add-expense" : "#settle-all").click();
+      switchMode("real");
+      $(button.dataset.guideAction === "first-expense" ? "#add-expense" : "#settle-all").click();
     };
   });
   $("#dismiss-guide").onclick = () => {
@@ -835,6 +838,33 @@ $("#connect-wallet").addEventListener("click", async (event) => {
   }
   if (mode === "real") $("#wallet-dialog").showModal();
 });
+/* Sample/My tab switcher stays hidden until a wallet connects. wallet.js is untouched; we watch its button label. */
+function setupModeSwitcher() {
+  const button = $("#connect-wallet");
+  const switcher = $(".mode-switch");
+  let connected = false;
+  const sync = () => {
+    const label = button.textContent.trim();
+    // wallet.js labels: "Wallet connected" (connected, My tab), "Connect wallet" (disconnected),
+    // "Wallet \u00b7 My tab only" (Sample open). The last carries no news, so keep the last known state.
+    if (label === "Wallet connected") connected = true;
+    else if (label === "Connect wallet") connected = false;
+    switcher.hidden = !connected;
+    if (!connected && mode !== "real") switchMode("real");
+  };
+  new MutationObserver(sync).observe(button, { childList: true, characterData: true, subtree: true });
+  sync();
+}
+$("#hero-connect").addEventListener("click", () => {
+  switchMode("real");
+  $("#connect-wallet").click();
+});
+$("#hero-start").addEventListener("click", () => {
+  switchMode("real");
+  $("#app").scrollIntoView({ behavior: reducedMotion.matches ? "auto" : "smooth" });
+  $("#add-expense").click();
+});
+setupModeSwitcher();
 renderSubmission();
 setupGuide();
 setupMotion();

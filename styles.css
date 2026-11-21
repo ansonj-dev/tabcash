@@ -350,3 +350,6 @@ dialog .split-chip { display: inline-flex; flex-direction: row; align-items: cen
   .flow-link { stroke-dashoffset: 0; }
   .btn, .toast, .bar-fill { transition: none; }
 }
+
+.mode-switch[hidden] { display: none; }
+.empty-state .btn { margin-top: 12px; }
